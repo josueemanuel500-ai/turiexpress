@@ -5,3 +5,6 @@ support.js
 image-slot.js
 .thumbnail
 uploads/
+
+# Configuración local de Claude Code
+.claude/
