@@ -1,5 +1,5 @@
 // Configura aquí el WhatsApp del negocio: código de país + número, sin signos ni espacios.
-const WHATSAPP_NUMBER = '5210000000000';
+const WHATSAPP_NUMBER = '529995095005';
 const state = { month: new Date(new Date().getFullYear(), new Date().getMonth(), 1), start: null, end: null };
 const months = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
 const dayGrid = document.querySelector('#calendar-days');
