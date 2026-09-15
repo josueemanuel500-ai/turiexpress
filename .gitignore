@@ -1,0 +1,7 @@
+# Material original del editor y archivos de sistema
+*.zip
+*.dc.html
+support.js
+image-slot.js
+.thumbnail
+uploads/

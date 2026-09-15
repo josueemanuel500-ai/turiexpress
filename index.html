@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es-MX">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Renta de Nissan Urvan para grupos y traslados en México.">
+  <title>TURI EXPRESS MX | Renta de Nissan Urvan</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="#inicio" aria-label="Turi Express MX, inicio">TURI EXPRESS <span>MX</span></a>
+    <button class="menu-button" aria-label="Abrir menú" aria-expanded="false">☰</button>
+    <nav class="main-nav" aria-label="Navegación principal">
+      <a href="#inicio">Inicio</a><a href="#flota">Flota</a><a href="#disponibilidad">Disponibilidad</a><a href="#requisitos">Requisitos</a><a href="#contacto">Contacto</a>
+      <a class="button button-small whatsapp-link" data-message="Hola, quisiera información sobre la renta de una Nissan Urvan." target="_blank" rel="noopener">WhatsApp</a>
+    </nav>
+  </header>
+
+  <main>
+    <section id="inicio" class="hero section-shell">
+      <div class="hero-copy">
+        <p class="eyebrow">RENTA DE VANS URBAN · 3 UNIDADES</p>
+        <h1>Tu Nissan Urvan, lista para el próximo viaje.</h1>
+        <p class="lead">Renta vans para grupos, traslados y viajes de varios días. Elige tus fechas y confirma tu solicitud directamente por WhatsApp.</p>
+        <div class="actions"><a class="button" href="#disponibilidad">Ver disponibilidad</a><a class="button button-outline whatsapp-link" data-message="Hola, quisiera cotizar una Nissan Urvan." target="_blank" rel="noopener">Escríbenos por WhatsApp</a></div>
+      </div>
+      <div class="hero-visual" role="img" aria-label="Nissan Urvan para renta"><div class="van">🚐</div><p>Traslados cómodos para hasta 15 pasajeros</p></div>
+    </section>
+
+    <section id="flota" class="section-shell fleet-section">
+      <div class="section-heading"><div><p class="eyebrow">NUESTRA FLOTA</p><h2>Tres unidades listas para rodar</h2><p>Las Nissan Urvan cuentan con espacio y comodidad para cada traslado.</p></div></div>
+      <div class="cards">
+        <article class="card"><div class="vehicle-icon">🚐</div><h3>Nissan Urvan 01</h3><p>Disponible para renta</p><ul><li>Hasta 15 pasajeros</li><li>Aire acondicionado</li><li>Transmisión manual</li><li>Bluetooth</li></ul><a href="#disponibilidad">Consultar fechas</a></article>
+        <article class="card"><div class="vehicle-icon">🚐</div><h3>Nissan Urvan 02</h3><p>Disponible para renta</p><ul><li>Hasta 15 pasajeros</li><li>Aire acondicionado</li><li>Transmisión manual</li><li>Bluetooth</li></ul><a href="#disponibilidad">Consultar fechas</a></article>
+        <article class="card"><div class="vehicle-icon">🚐</div><h3>Nissan Urvan 03</h3><p>Disponible para renta</p><ul><li>Hasta 15 pasajeros</li><li>Aire acondicionado</li><li>Transmisión manual</li><li>Bluetooth</li></ul><a href="#disponibilidad">Consultar fechas</a></article>
+      </div>
+    </section>
+
+    <section id="disponibilidad" class="booking-section">
+      <div class="section-shell"><div class="section-heading"><p class="eyebrow">DISPONIBILIDAD</p><h2>Solicita tus fechas</h2><p>Selecciona inicio y fin. Te asignaremos una de las unidades libres y enviaremos la solicitud por WhatsApp.</p></div>
+        <div class="booking-grid"><div class="calendar-card"><div class="calendar-top"><button id="previous-month" aria-label="Mes anterior">‹</button><h3 id="calendar-title"></h3><button id="next-month" aria-label="Mes siguiente">›</button></div><div class="weekdays"><span>Lun</span><span>Mar</span><span>Mié</span><span>Jue</span><span>Vie</span><span>Sáb</span><span>Dom</span></div><div id="calendar-days" class="calendar-days" aria-live="polite"></div><p class="calendar-note"><span></span> Fechas pasadas no disponibles · Las reservaciones se confirman por WhatsApp.</p></div>
+          <form id="booking-form" class="booking-form"><h3>Tu solicitud</h3><div class="date-summary"><div><small>INICIO</small><strong id="start-display">Elige una fecha</strong></div><div><small>FIN</small><strong id="end-display">Elige una fecha</strong></div></div><label>Tu nombre<input id="name" name="name" autocomplete="name" placeholder="Ej. Juan Pérez" required></label><label>Tu teléfono (WhatsApp)<input id="phone" name="phone" autocomplete="tel" inputmode="tel" placeholder="Ej. 33 1234 5678" required></label><p id="form-message" class="form-message" role="alert"></p><button class="button" type="submit">Enviar solicitud por WhatsApp</button><button id="clear-dates" class="text-button" type="button">Elegir fechas de nuevo</button><p class="fine-print">Tu solicitud no es una reserva confirmada hasta que el equipo de TURI EXPRESS MX la valide.</p></form></div>
+      </div>
+    </section>
+
+    <section id="requisitos" class="section-shell requirements"><div class="section-heading"><p class="eyebrow">ANTES DE RENTAR</p><h2>Requisitos sencillos, viaje tranquilo</h2></div><div class="requirements-grid"><article><h3>Edad mínima</h3><p>25 años cumplidos.</p></article><article><h3>Licencia vigente</h3><p>Licencia de conducir no vencida.</p></article><article><h3>Identificación oficial</h3><p>INE o pasaporte vigente.</p></article><article><h3>Depósito en garantía</h3><p>Reembolsable al devolver la unidad.</p></article></div><div class="policy"><h3>Políticas de uso</h3><p>La unidad se entrega y se devuelve con el mismo nivel de combustible. El kilometraje es libre dentro del área metropolitana. Las fechas y horario de entrega se confirman por WhatsApp.</p></div></section>
+  </main>
+  <footer id="contacto"><div><a class="brand" href="#inicio">TURI EXPRESS <span>MX</span></a><p>Renta de vans Nissan Urvan para grupos y traslados.</p></div><div><h3>Horario</h3><p>Lun–Dom · 8:00–20:00</p></div><div><h3>¿Listo para viajar?</h3><a class="button whatsapp-link" data-message="Hola, quisiera información sobre la renta de una Nissan Urvan." target="_blank" rel="noopener">Hablar por WhatsApp</a></div><small>© <span id="year"></span> TURI EXPRESS MX. Todos los derechos reservados.</small></footer>
+  <script src="app.js"></script>
+</body>
+</html>
