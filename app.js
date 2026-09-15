@@ -61,6 +61,7 @@ function renderCalendar() {
   }
   document.querySelector('#start-display').textContent = humanDate(state.start);
   document.querySelector('#end-display').textContent = humanDate(state.end);
+  updateSubmitState();
 }
 
 function selectDate(date) {
@@ -69,9 +70,25 @@ function selectDate(date) {
   renderCalendar();
 }
 
+function updateSubmitState() {
+  const submitButton = document.querySelector('#submit-request');
+  const hint = document.querySelector('#submit-hint');
+  const hasDates = !!(state.start && state.end);
+  const hasInfo = !!(document.querySelector('#name').value.trim() && document.querySelector('#phone').value.replace(/\D/g, '').length >= 10);
+  const ready = hasDates && hasInfo;
+  submitButton.disabled = !ready;
+  hint.textContent = ready
+    ? 'Tu apartado queda registrado y se confirma por WhatsApp.'
+    : (!hasDates && !hasInfo ? 'Elige tus fechas y escribe tu nombre y teléfono.'
+      : (!hasDates ? 'Elige tu fecha de inicio y fin en el calendario.'
+        : 'Escribe tu nombre y teléfono para continuar.'));
+}
+
 document.querySelector('#previous-month').onclick = () => { state.month = new Date(state.month.getFullYear(), state.month.getMonth() - 1, 1); renderCalendar(); };
 document.querySelector('#next-month').onclick = () => { state.month = new Date(state.month.getFullYear(), state.month.getMonth() + 1, 1); renderCalendar(); };
 document.querySelector('#clear-dates').onclick = () => { state.start = null; state.end = null; renderCalendar(); };
+document.querySelector('#name').addEventListener('input', updateSubmitState);
+document.querySelector('#phone').addEventListener('input', updateSubmitState);
 
 document.querySelector('#booking-form').addEventListener('submit', async event => {
   event.preventDefault();
