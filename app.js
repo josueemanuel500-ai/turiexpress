@@ -23,6 +23,10 @@ const state = {
   bookings: [],       // {unit_id, start_date, end_date} público, sin datos del cliente
   staffBookings: [],  // filas completas, solo visibles para personal autenticado
   staffUnitId: 1,
+  pickerField: null,  // 'start' | 'end' | null: qué selector de fecha del panel de personal está abierto
+  pickerMonth: new Date(today.getFullYear(), today.getMonth(), 1),
+  adminStart: null,   // fecha ISO elegida en el picker del panel de personal
+  adminEnd: null,
 };
 
 function freeUnitsFor(startISO, endISO, bookings) {
@@ -218,27 +222,85 @@ async function removeBooking(id) {
   await loadPublicAvailability();
 }
 
+// ==== Selector de fecha (mini calendario) del panel de personal ====
+function closePicker() {
+  state.pickerField = null;
+  document.querySelector('#admin-start-picker').hidden = true;
+  document.querySelector('#admin-end-picker').hidden = true;
+}
+
+function openPicker(field) {
+  state.pickerField = field;
+  state.pickerMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+  document.querySelector('#admin-start-picker').hidden = field !== 'start';
+  document.querySelector('#admin-end-picker').hidden = field !== 'end';
+  renderPicker();
+}
+
+function renderPicker() {
+  const field = state.pickerField;
+  if (!field) return;
+  const box = document.querySelector(`#admin-${field}-picker`);
+  const month = state.pickerMonth;
+  const year = month.getFullYear(), number = month.getMonth();
+  const first = (new Date(year, number, 1).getDay() + 6) % 7;
+  const count = new Date(year, number + 1, 0).getDate();
+  const unitBookings = state.staffBookings.filter(b => b.unit_id === state.staffUnitId);
+  const weekdayLabels = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+  let daysHTML = '';
+  for (let i = 0; i < first; i++) daysHTML += '<span></span>';
+  for (let n = 1; n <= count; n++) {
+    const dISO = iso(new Date(year, number, n));
+    const booked = unitBookings.some(b => dISO >= b.start_date && dISO <= b.end_date);
+    daysHTML += `<button type="button" class="picker-day${booked ? ' booked' : ''}" data-date="${dISO}">${n}</button>`;
+  }
+  box.innerHTML = `
+    <div class="picker-top">
+      <button type="button" class="picker-prev">‹</button>
+      <span class="picker-title">${months[number]} ${year}</span>
+      <button type="button" class="picker-next">›</button>
+    </div>
+    <div class="picker-grid">
+      ${weekdayLabels.map(l => `<span class="picker-weekday">${l}</span>`).join('')}
+      ${daysHTML}
+    </div>`;
+  box.querySelector('.picker-prev').addEventListener('click', () => { state.pickerMonth = new Date(year, number - 1, 1); renderPicker(); });
+  box.querySelector('.picker-next').addEventListener('click', () => { state.pickerMonth = new Date(year, number + 1, 1); renderPicker(); });
+  box.querySelectorAll('.picker-day').forEach(btn => btn.addEventListener('click', () => selectPickerDate(btn.dataset.date)));
+}
+
+function selectPickerDate(dateISO) {
+  if (state.pickerField === 'start') { state.adminStart = dateISO; document.querySelector('#admin-start-toggle').textContent = humanDate(parseISO(dateISO)); }
+  else if (state.pickerField === 'end') { state.adminEnd = dateISO; document.querySelector('#admin-end-toggle').textContent = humanDate(parseISO(dateISO)); }
+  closePicker();
+}
+
+document.querySelector('#admin-start-toggle').addEventListener('click', event => { event.stopPropagation(); state.pickerField === 'start' ? closePicker() : openPicker('start'); });
+document.querySelector('#admin-end-toggle').addEventListener('click', event => { event.stopPropagation(); state.pickerField === 'end' ? closePicker() : openPicker('end'); });
+document.querySelector('#admin-start-picker').addEventListener('click', event => event.stopPropagation());
+document.querySelector('#admin-end-picker').addEventListener('click', event => event.stopPropagation());
+document.addEventListener('click', () => closePicker());
+
 document.querySelector('#staff-add-booking').addEventListener('click', async () => {
-  const start = document.querySelector('#admin-start').value;
-  const end = document.querySelector('#admin-end').value;
   const clientName = document.querySelector('#admin-client-name').value.trim();
   const clientPhone = document.querySelector('#admin-client-phone').value.trim();
   const note = document.querySelector('#admin-note').value.trim();
   const errorEl = document.querySelector('#staff-add-error');
   errorEl.textContent = '';
-  if (!start || !end) { errorEl.textContent = 'Selecciona ambas fechas.'; return; }
-  if (end < start) { errorEl.textContent = 'La fecha de fin debe ser posterior al inicio.'; return; }
+  if (!state.adminStart || !state.adminEnd) { errorEl.textContent = 'Selecciona ambas fechas.'; return; }
+  if (state.adminEnd < state.adminStart) { errorEl.textContent = 'La fecha de fin debe ser posterior al inicio.'; return; }
   if (!clientName) { errorEl.textContent = 'Escribe el nombre del cliente.'; return; }
   if (clientPhone.replace(/\D/g, '').length < 10) { errorEl.textContent = 'Escribe un teléfono válido.'; return; }
 
   const { error } = await db.from('bookings').insert({
-    unit_id: state.staffUnitId, start_date: start, end_date: end,
+    unit_id: state.staffUnitId, start_date: state.adminStart, end_date: state.adminEnd,
     client_name: clientName, client_phone: clientPhone, note: note || null,
   });
   if (error) { errorEl.textContent = 'Ya existe una ocupación que se cruza con esas fechas.'; return; }
 
-  document.querySelector('#admin-start').value = '';
-  document.querySelector('#admin-end').value = '';
+  state.adminStart = null; state.adminEnd = null;
+  document.querySelector('#admin-start-toggle').textContent = 'Selecciona fecha';
+  document.querySelector('#admin-end-toggle').textContent = 'Selecciona fecha';
   document.querySelector('#admin-client-name').value = '';
   document.querySelector('#admin-client-phone').value = '';
   document.querySelector('#admin-note').value = '';

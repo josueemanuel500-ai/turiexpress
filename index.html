@@ -102,8 +102,16 @@
         <div class="staff-add-card">
           <h4>Agregar ocupación</h4>
           <div class="staff-fields-grid">
-            <label>Inicio<input type="date" id="admin-start"></label>
-            <label>Fin<input type="date" id="admin-end"></label>
+            <div class="picker-field">
+              <label>Inicio</label>
+              <button type="button" class="picker-toggle" id="admin-start-toggle">Selecciona fecha</button>
+              <div class="picker-box" id="admin-start-picker" hidden></div>
+            </div>
+            <div class="picker-field">
+              <label>Fin</label>
+              <button type="button" class="picker-toggle" id="admin-end-toggle">Selecciona fecha</button>
+              <div class="picker-box" id="admin-end-picker" hidden></div>
+            </div>
           </div>
           <div class="staff-fields-grid">
             <label>Nombre del cliente<input type="text" id="admin-client-name" placeholder="Ej. Juan Pérez"></label>
