@@ -1,6 +1,10 @@
 // Configura aquí el WhatsApp del negocio: código de país + número, sin signos ni espacios.
 const WHATSAPP_NUMBER = '529995095005';
 
+// Disuade copiar imágenes casualmente. No es protección real: cualquiera con
+// herramientas de desarrollador o "ver código fuente" lo evita igual.
+document.addEventListener('contextmenu', event => event.preventDefault());
+
 // Proyecto Supabase de Turi Express. La clave "publishable" es segura de exponer
 // en el cliente: el acceso real está controlado por las políticas RLS en la base de datos.
 const SUPABASE_URL = 'https://wccrvrnyrsxkccwfqbae.supabase.co';
