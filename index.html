@@ -37,6 +37,7 @@
     <button class="menu-button" aria-label="Abrir menú" aria-expanded="false">☰</button>
     <nav class="main-nav" aria-label="Navegación principal">
       <a href="#inicio">Inicio</a><a href="#flota">Flota</a><a href="#disponibilidad">Disponibilidad</a><a href="#requisitos">Requisitos</a><a href="#contacto">Contacto</a>
+      <button type="button" class="text-button staff-open">Personal</button>
       <a class="button button-small whatsapp-link" data-message="Hola, quisiera información sobre la renta de una Nissan Urvan." target="_blank" rel="noopener">WhatsApp</a>
     </nav>
   </header>
@@ -70,7 +71,56 @@
 
     <section id="requisitos" class="section-shell requirements"><div class="section-heading"><p class="eyebrow">ANTES DE RENTAR</p><h2>Requisitos sencillos, viaje tranquilo</h2></div><div class="requirements-grid"><article><h3>Edad mínima</h3><p>25 años cumplidos.</p></article><article><h3>Licencia vigente</h3><p>Licencia de conducir no vencida.</p></article><article><h3>Identificación oficial</h3><p>INE o pasaporte vigente.</p></article><article><h3>Depósito en garantía</h3><p>Reembolsable al devolver la unidad.</p></article></div><div class="policy"><h3>Políticas de uso</h3><p>La unidad se entrega y se devuelve con el mismo nivel de combustible. El kilometraje es libre dentro del área metropolitana. Las fechas y horario de entrega se confirman por WhatsApp.</p></div></section>
   </main>
-  <footer id="contacto"><div><a class="brand" href="#inicio">TURI EXPRESS <span>MX</span></a><p>Renta de vans Nissan Urvan para grupos y traslados.</p></div><div><h3>Horario</h3><p>Lun–Dom · 8:00–20:00</p></div><div><h3>¿Listo para viajar?</h3><a class="button whatsapp-link" data-message="Hola, quisiera información sobre la renta de una Nissan Urvan." target="_blank" rel="noopener">Hablar por WhatsApp</a></div><small>© <span id="year"></span> TURI EXPRESS MX. Todos los derechos reservados.</small></footer>
+  <footer id="contacto"><div><a class="brand" href="#inicio">TURI EXPRESS <span>MX</span></a><p>Renta de vans Nissan Urvan para grupos y traslados.</p></div><div><h3>Horario</h3><p>Lun–Dom · 8:00–20:00</p></div><div><h3>¿Listo para viajar?</h3><a class="button whatsapp-link" data-message="Hola, quisiera información sobre la renta de una Nissan Urvan." target="_blank" rel="noopener">Hablar por WhatsApp</a></div><div><h3>Personal</h3><button type="button" class="text-button staff-open footer-staff-open">Acceso al panel</button></div><small>© <span id="year"></span> TURI EXPRESS MX. Todos los derechos reservados.</small></footer>
+
+  <div id="staff-modal" class="modal-overlay" hidden>
+    <div class="modal-panel">
+      <div class="modal-head">
+        <h3 id="staff-modal-title">Acceso de personal</h3>
+        <button type="button" class="modal-close" id="staff-close" aria-label="Cerrar">×</button>
+      </div>
+
+      <div id="staff-login-view">
+        <p class="modal-hint">Inicia sesión con tu cuenta de personal para gestionar la disponibilidad.</p>
+        <form id="staff-login-form">
+          <label>Correo<input id="staff-email" type="email" autocomplete="username" required></label>
+          <label>Contraseña<input id="staff-password" type="password" autocomplete="current-password" required></label>
+          <p id="staff-login-error" class="form-message" role="alert"></p>
+          <button class="button" type="submit">Entrar</button>
+        </form>
+        <p class="fine-print">¿No tienes cuenta? Pídele al administrador que te dé de alta desde el panel de Supabase.</p>
+      </div>
+
+      <div id="staff-panel-view" hidden>
+        <div class="staff-session-row">
+          <span id="staff-session-label"></span>
+          <button type="button" class="text-button" id="staff-logout">Salir</button>
+        </div>
+
+        <div class="unit-tabs" id="staff-unit-tabs"></div>
+
+        <div class="staff-add-card">
+          <h4>Agregar ocupación</h4>
+          <div class="staff-fields-grid">
+            <label>Inicio<input type="date" id="admin-start"></label>
+            <label>Fin<input type="date" id="admin-end"></label>
+          </div>
+          <div class="staff-fields-grid">
+            <label>Nombre del cliente<input type="text" id="admin-client-name" placeholder="Ej. Juan Pérez"></label>
+            <label>Teléfono<input type="tel" id="admin-client-phone" placeholder="Ej. 33 1234 5678"></label>
+          </div>
+          <label>Nota interna (opcional)<input type="text" id="admin-note"></label>
+          <p id="staff-add-error" class="form-message" role="alert"></p>
+          <button class="button" type="button" id="staff-add-booking">Agregar ocupación</button>
+        </div>
+
+        <h4>Ocupaciones registradas</h4>
+        <div id="staff-bookings-list" class="staff-bookings-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="app.js"></script>
 </body>
 </html>
