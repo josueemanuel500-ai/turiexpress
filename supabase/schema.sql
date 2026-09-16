@@ -117,3 +117,41 @@ grant select on public.public_availability to anon, authenticated;
 grant select on public.units to anon, authenticated;
 grant insert on public.bookings to anon, authenticated;
 grant select, delete on public.bookings to authenticated;
+
+-- ============================================================
+-- Retención de datos: borrado automático a los 12 meses
+-- ============================================================
+-- Cumple la promesa del aviso de privacidad (/aviso-privacidad.html):
+-- los datos del cliente se eliminan solos, sin depender de que alguien
+-- se acuerde de borrarlos a mano.
+
+create extension if not exists pg_cron;
+
+create or replace function public.delete_expired_bookings()
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  deleted_count integer;
+begin
+  delete from public.bookings
+  where end_date < current_date - interval '12 months';
+  get diagnostics deleted_count = row_count;
+  return deleted_count;
+end;
+$$;
+
+-- Solo la tarea programada debe ejecutarla, nunca un visitante vía /rest/v1/rpc.
+revoke execute on function public.delete_expired_bookings() from public, anon, authenticated;
+
+comment on function public.delete_expired_bookings() is
+  'Elimina reservas cuya fecha de fin tiene más de 12 meses, según el plazo de conservación publicado en /aviso-privacidad.html. Se ejecuta diariamente vía pg_cron (job: delete-expired-bookings).';
+
+-- Corre todos los días a las 09:00 UTC (03:00 en Mérida).
+select cron.schedule(
+  'delete-expired-bookings',
+  '0 9 * * *',
+  $$select public.delete_expired_bookings()$$
+);

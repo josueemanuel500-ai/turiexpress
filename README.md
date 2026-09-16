@@ -32,4 +32,21 @@ Cómo funciona la seguridad:
 - Solo el personal con sesión iniciada puede ver el nombre/teléfono/nota de cada reserva, agregar ocupaciones manuales o eliminar reservas.
 - La clave publicada en `app.js` es segura de exponer: el control de acceso real está en las políticas de la base de datos, no en ocultar la clave.
 
+## Páginas legales y retención de datos
+
+- [`aviso-privacidad.html`](aviso-privacidad.html): aviso de privacidad conforme a la LFPDPPP (México). Declara que **no se comparten datos con terceros** con fines comerciales y que los registros se eliminan **12 meses después de la fecha de fin de la renta**.
+- [`terminos.html`](terminos.html): términos y condiciones del servicio de renta.
+- El formulario de solicitud enlaza a ambas páginas antes de enviar.
+
+**El borrado a los 12 meses está implementado de verdad**, no solo escrito: la función `public.delete_expired_bookings()` corre todos los días a las 09:00 UTC mediante `pg_cron` (job `delete-expired-bookings`). Ver [`supabase/schema.sql`](supabase/schema.sql).
+
+Para revisar el estado del borrado automático:
+
+```sql
+select jobid, jobname, schedule, active from cron.job;
+select * from cron.job_run_details order by start_time desc limit 10;
+```
+
+> **Pendiente legal:** el aviso está a nombre comercial "Turi Express MX". La LFPDPPP pide el nombre del responsable (persona física o razón social) y su domicilio. Conviene sustituirlo por el nombre legal completo y agregar un correo de contacto para derechos ARCO (hoy el canal es WhatsApp). Este documento es una base sólida, pero conviene que un abogado lo revise antes de operar a gran escala.
+
 **Dar de alta a una persona del equipo:** en el [dashboard de Supabase](https://supabase.com/dashboard/project/wccrvrnyrsxkccwfqbae) → Authentication → Users → "Add user", crea el usuario con su correo y contraseña. Opcionalmente, en "User Metadata" agrega `{"name": "Su Nombre"}` para que el panel muestre su nombre en vez del correo. No hay alta de personal autoservicio desde el sitio (a propósito: eso requeriría exponer una clave con privilegios administrativos en el navegador).
