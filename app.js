@@ -330,3 +330,19 @@ db.auth.getSession().then(({ data }) => applySession(data.session));
 
 renderCalendar();
 loadPublicAvailability();
+
+// Respaldo para el acceso de personal desde cualquier enlace o con ?admin=1.
+// Se ejecuta al final para evitar que una carga lenta del SDK interfiera con el modal.
+function revealStaffAccess() {
+  const modal = document.querySelector('#staff-modal');
+  if (modal) modal.hidden = false;
+}
+document.addEventListener('click', event => {
+  if (event.target.closest('.staff-open')) {
+    event.preventDefault();
+    revealStaffAccess();
+  }
+});
+if (new URLSearchParams(window.location.search).get('admin') === '1') {
+  window.requestAnimationFrame(revealStaffAccess);
+}
