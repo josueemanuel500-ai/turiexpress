@@ -166,10 +166,31 @@ document.querySelector('#staff-login-form').addEventListener('submit', async eve
   const email = document.querySelector('#staff-email').value.trim();
   const password = document.querySelector('#staff-password').value;
   const errorEl = document.querySelector('#staff-login-error');
+  const submitButton = event.currentTarget.querySelector('button[type="submit"]');
   errorEl.textContent = '';
-  const { error } = await db.auth.signInWithPassword({ email, password });
-  if (error) { errorEl.textContent = 'Correo o contraseña incorrectos.'; return; }
-  document.querySelector('#staff-login-form').reset();
+  submitButton.disabled = true;
+  submitButton.textContent = 'Verificando acceso…';
+
+  try {
+    const { data, error } = await db.auth.signInWithPassword({ email, password });
+    if (error || !data.session) {
+      const detail = error?.message?.toLowerCase() || '';
+      errorEl.textContent = detail.includes('email not confirmed')
+        ? 'Confirma el correo de esta cuenta antes de iniciar sesión.'
+        : 'No fue posible iniciar sesión. Revisa tu correo y contraseña.';
+      return;
+    }
+
+    // No dependemos únicamente del evento de Supabase: al validar la sesión,
+    // el panel se presenta inmediatamente en esta misma pantalla.
+    document.querySelector('#staff-login-form').reset();
+    applySession(data.session);
+  } catch (_error) {
+    errorEl.textContent = 'No pudimos conectar con el acceso. Revisa tu conexión e inténtalo de nuevo.';
+  } finally {
+    submitButton.disabled = false;
+    submitButton.textContent = 'Entrar';
+  }
 });
 
 document.querySelector('#staff-logout').addEventListener('click', async () => { await db.auth.signOut(); });
