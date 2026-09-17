@@ -306,6 +306,24 @@ document.querySelector('#admin-start-picker').addEventListener('click', event =>
 document.querySelector('#admin-end-picker').addEventListener('click', event => event.stopPropagation());
 document.addEventListener('click', () => closePicker());
 
+// Controladores en fase de captura: evitan que el cierre global del documento
+// intercepte el mismo clic que debe abrir los calendarios del panel.
+function toggleStaffDatePicker(field, event) {
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  const picker = document.querySelector(`#admin-${field}-picker`);
+  const wasOpen = !picker.hidden;
+  closePicker();
+  if (!wasOpen) openPicker(field);
+}
+
+document.querySelector('#admin-start-toggle').addEventListener(
+  'click', event => toggleStaffDatePicker('start', event), true,
+);
+document.querySelector('#admin-end-toggle').addEventListener(
+  'click', event => toggleStaffDatePicker('end', event), true,
+);
+
 document.querySelector('#staff-add-booking').addEventListener('click', async () => {
   const clientName = document.querySelector('#admin-client-name').value.trim();
   const clientPhone = document.querySelector('#admin-client-phone').value.trim();
