@@ -60,7 +60,7 @@ function renderCalendar() {
     const button = document.createElement('button');
     button.type = 'button'; button.className = 'day'; button.textContent = n;
     button.disabled = date < today || fullyBooked;
-    button.title = date < today ? 'Fecha pasada' : (fullyBooked ? 'Sin unidades disponibles' : `${freeCount} de 3 unidades libres`);
+    button.title = date < today ? 'Fecha pasada' : (fullyBooked ? 'Sin unidades disponibles' : 'Disponible');
     if ((state.start && iso(date) === iso(state.start)) || (state.end && iso(date) === iso(state.end))) button.classList.add('selected');
     if (isBetween(date)) button.classList.add('in-range');
     if (fullyBooked) button.classList.add('full');
