@@ -11,11 +11,21 @@ const year = document.querySelector('#year');
 if (year) year.textContent = new Date().getFullYear();
 
 const menu = document.querySelector('.menu-button');
-if (menu) menu.addEventListener('click', event => {
+if (menu) {
   const nav = document.querySelector('.main-nav');
-  nav.classList.toggle('open');
-  event.currentTarget.setAttribute('aria-expanded', String(nav.classList.contains('open')));
-});
+  const closeMenu = () => {
+    nav.classList.remove('open');
+    menu.setAttribute('aria-expanded', 'false');
+    menu.setAttribute('aria-label', 'Abrir menú');
+  };
+  menu.addEventListener('click', () => {
+    const isOpen = nav.classList.toggle('open');
+    menu.setAttribute('aria-expanded', String(isOpen));
+    menu.setAttribute('aria-label', isOpen ? 'Cerrar menú' : 'Abrir menú');
+  });
+  nav.addEventListener('click', event => { if (event.target.closest('a')) closeMenu(); });
+  document.addEventListener('keydown', event => { if (event.key === 'Escape') closeMenu(); });
+}
 
 function standardizeFooter() {
   const footer = document.querySelector('footer');

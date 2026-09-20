@@ -140,11 +140,22 @@ document.querySelector('#booking-form').addEventListener('submit', async event =
 document.querySelectorAll('.whatsapp-link').forEach(link => {
   link.href = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(link.dataset.message || 'Hola')}`;
 });
-document.querySelector('.menu-button').onclick = event => {
+const menuButton = document.querySelector('.menu-button');
+if (menuButton) {
   const nav = document.querySelector('.main-nav');
-  nav.classList.toggle('open');
-  event.currentTarget.setAttribute('aria-expanded', nav.classList.contains('open'));
-};
+  const closeMenu = () => {
+    nav.classList.remove('open');
+    menuButton.setAttribute('aria-expanded', 'false');
+    menuButton.setAttribute('aria-label', 'Abrir menú');
+  };
+  menuButton.addEventListener('click', () => {
+    const isOpen = nav.classList.toggle('open');
+    menuButton.setAttribute('aria-expanded', String(isOpen));
+    menuButton.setAttribute('aria-label', isOpen ? 'Cerrar menú' : 'Abrir menú');
+  });
+  nav.addEventListener('click', event => { if (event.target.closest('a')) closeMenu(); });
+  document.addEventListener('keydown', event => { if (event.key === 'Escape') closeMenu(); });
+}
 document.querySelector('#year').textContent = new Date().getFullYear();
 
 // ==== Panel de personal ====
