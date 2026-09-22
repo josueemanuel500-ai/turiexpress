@@ -156,7 +156,6 @@ if (menuButton) {
   nav.addEventListener('click', event => { if (event.target.closest('a')) closeMenu(); });
   document.addEventListener('keydown', event => { if (event.key === 'Escape') closeMenu(); });
 }
-document.querySelector('#year').textContent = new Date().getFullYear();
 
 // ==== Panel de personal ====
 const staffModal = document.querySelector('#staff-modal');
@@ -166,7 +165,6 @@ const staffPanelView = document.querySelector('#staff-panel-view');
 function openStaffModal() { staffModal.hidden = false; }
 function closeStaffModal() { staffModal.hidden = true; }
 
-document.querySelectorAll('.staff-open').forEach(btn => btn.addEventListener('click', openStaffModal));
 document.querySelector('#staff-close').addEventListener('click', closeStaffModal);
 staffModal.addEventListener('click', event => { if (event.target === staffModal) closeStaffModal(); });
 window.addEventListener('keydown', event => { if (event.key === 'Escape' && !staffModal.hidden) closeStaffModal(); });
@@ -381,22 +379,6 @@ db.auth.getSession().then(({ data }) => applySession(data.session));
 renderCalendar();
 loadPublicAvailability();
 
-// Respaldo para el acceso de personal desde cualquier enlace o con ?admin=1.
-// Se ejecuta al final para evitar que una carga lenta del SDK interfiera con el modal.
-function revealStaffAccess() {
-  const modal = document.querySelector('#staff-modal');
-  if (modal) modal.hidden = false;
-}
-document.addEventListener('click', event => {
-  if (event.target.closest('.staff-open')) {
-    event.preventDefault();
-    revealStaffAccess();
-  }
-});
-if (new URLSearchParams(window.location.search).get('admin') === '1') {
-  window.requestAnimationFrame(revealStaffAccess);
-}
-
 function standardizeFooter() {
   const footer = document.querySelector('footer');
   if (!footer) return;
@@ -405,8 +387,35 @@ function standardizeFooter() {
     <div><a class="brand" href="/">TURI EXPRESS <span>MX</span></a><p>Renta de Nissan Urvan para grupos y traslados.</p></div>
     <div><h3>Horario</h3><p>Lun–Dom · 8:00–20:00</p></div>
     <div><h3>¿Listo para viajar?</h3><a class="button" href="https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(whatsappText)}" target="_blank" rel="noopener">Hablar por WhatsApp</a></div>
-    <div><h3>Legal</h3><p><a class="footer-link" href="/aviso-privacidad">Aviso de privacidad</a></p><p><a class="footer-link" href="/terminos">Términos y condiciones</a></p><p><a class="footer-link footer-staff-open" href="/disponibilidad?admin=1">Acceso de personal</a></p></div>
+    <div><h3>Legal</h3><p><a class="footer-link" href="/aviso-privacidad">Aviso de privacidad</a></p><p><a class="footer-link" href="/terminos">Términos y condiciones</a></p></div>
     <small>© ${new Date().getFullYear()} TURI EXPRESS MX. Todos los derechos reservados.</small>`;
 }
 
 standardizeFooter();
+
+// Acceso de personal oculto: 4 toques rápidos sobre el logo abren el panel
+// (en vez de un enlace visible en el menú). Un clic normal navega igual que
+// antes; solo se intercepta cuando se detecta la secuencia de 4 toques.
+function setupStaffGesture() {
+  const brand = document.querySelector('.brand');
+  if (!brand) return;
+  const targetHref = brand.getAttribute('href');
+  let tapCount = 0;
+  let tapTimer = null;
+
+  brand.addEventListener('click', event => {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    tapCount += 1;
+    clearTimeout(tapTimer);
+
+    if (tapCount >= 4) {
+      tapCount = 0;
+      openStaffModal();
+      return;
+    }
+
+    tapTimer = setTimeout(() => { tapCount = 0; window.location.href = targetHref; }, 500);
+  });
+}
+setupStaffGesture();

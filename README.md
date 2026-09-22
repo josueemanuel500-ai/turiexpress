@@ -6,7 +6,7 @@ Sitio para solicitar la renta de Nissan Urvan mediante WhatsApp, con disponibili
 
 El sitio no requiere compilación: `index.html` es el punto de entrada.
 
-**Hostinger (hosting compartido):** sube el contenido de este repositorio (todos los archivos de la raíz: `index.html`, `styles.css`, `app.js`, `favicon.svg`, `favicon-32.png`, `apple-touch-icon.png`, `og-image.png`) a `public_html` mediante el Administrador de archivos de hPanel o por FTP. No hay build ni dependencias que instalar.
+**Hostinger (hosting compartido):** sube el contenido de este repositorio (todos los archivos de la raíz: `index.html`, `styles.css`, `app.js`, `favicon.svg`, `favicon-32.png`, `apple-touch-icon.png`, `og-image.jpg`) a `public_html` mediante el Administrador de archivos de hPanel o por FTP. No hay build ni dependencias que instalar.
 
 **GitHub Pages (alternativa):** selecciona la rama `main` y la carpeta raíz en la configuración del repositorio.
 
@@ -16,12 +16,19 @@ Dominio configurado en las meta tags (Open Graph/Twitter): `https://turiexpress.
 
 Edita `WHATSAPP_NUMBER` en `app.js` con el número real del negocio: código de país + número, sin `+`, espacios ni guiones. Ejemplo para México: `5213312345678`.
 
+Reemplaza `G-XXXXXXXXXX` por el ID de medición real de Google Analytics 4 en el `<head>` de cada página HTML (busca "gtag" en el repo para ubicarlos todos). Mientras quede el placeholder, las páginas cargan el script pero no se registra ningún dato.
+
 Las solicitudes se guardan en Supabase (para la disponibilidad compartida) y además abren WhatsApp con el mensaje prellenado para confirmar con el cliente.
 
 ## Assets
 
 - `favicon.svg` / `favicon-32.png` / `apple-touch-icon.png`: ícono de la pestaña y de acceso directo en iOS.
-- `og-image.png` (1200×630): imagen que se muestra al compartir el enlace en WhatsApp, Facebook, LinkedIn y X.
+- `og-image.jpg` (1200×630): imagen que se muestra al compartir el enlace en WhatsApp, Facebook, LinkedIn y X.
+- Las fotos (`urvan-hero.webp`, `urvan-flota.webp`) están en WebP para que pesen poco. Si agregas una foto nueva, expórtala en WebP (calidad ~80) en vez de PNG: un PNG de una foto puede pesar 10-20 veces más sin verse mejor.
+
+## Acceso de personal
+
+No hay ningún enlace visible al panel de personal en el sitio. Se abre tocando 4 veces seguidas el logo "TURI EXPRESS" del encabezado (en menos de medio segundo entre toques): en `index.html`/`disponibilidad.html` abre el panel directamente; en el resto de páginas navega a `disponibilidad.html?admin=1`, que lo abre automáticamente. También puedes ir directo a esa URL.
 
 ## Disponibilidad y panel de personal (Supabase)
 

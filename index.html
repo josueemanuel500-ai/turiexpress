@@ -17,7 +17,7 @@
   <meta property="og:title" content="Turi Express MX | Renta de Nissan Urvan">
   <meta property="og:description" content="Renta de Nissan Urvan para grupos, traslados y viajes de varios días en México. Confirma tu solicitud por WhatsApp.">
   <meta property="og:url" content="https://turiexpress.com.mx/">
-  <meta property="og:image" content="https://turiexpress.com.mx/og-image.png">
+  <meta property="og:image" content="https://turiexpress.com.mx/og-image.jpg">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta property="og:locale" content="es_MX">
@@ -25,7 +25,7 @@
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Turi Express MX | Renta de Nissan Urvan">
   <meta name="twitter:description" content="Renta de Nissan Urvan para grupos, traslados y viajes de varios días en México. Confirma tu solicitud por WhatsApp.">
-  <meta name="twitter:image" content="https://turiexpress.com.mx/og-image.png">
+  <meta name="twitter:image" content="https://turiexpress.com.mx/og-image.jpg">
 
   <script type="application/ld+json">
   {
@@ -34,7 +34,7 @@
     "name":"Turi Express MX",
     "url":"https://turiexpress.com.mx/",
     "telephone":"+529995095005",
-    "image":"https://turiexpress.com.mx/og-image.png",
+    "image":"https://turiexpress.com.mx/og-image.jpg",
     "description":"Renta de Nissan Urvan para grupos, traslados y viajes de varios días en Mérida, Yucatán.",
     "areaServed":{"@type":"City","name":"Mérida, Yucatán, México"},
     "openingHours":"Mo-Su 08:00-20:00",
@@ -42,10 +42,34 @@
   }
   </script>
 
+  <script type="application/ld+json">
+  {
+    "@context":"https://schema.org",
+    "@type":"FAQPage",
+    "mainEntity":[
+      {"@type":"Question","name":"¿Cuál es la edad mínima para rentar una Urvan?","acceptedAnswer":{"@type":"Answer","text":"25 años cumplidos, con licencia de conducir vigente e identificación oficial (INE o pasaporte)."}},
+      {"@type":"Question","name":"¿Qué documentos necesito para rentar?","acceptedAnswer":{"@type":"Answer","text":"Licencia de conducir vigente, identificación oficial (INE o pasaporte) y un depósito en garantía reembolsable al devolver la unidad."}},
+      {"@type":"Question","name":"¿Puedo rentar la Urvan por un solo día?","acceptedAnswer":{"@type":"Answer","text":"Sí. Rentamos por día o por varios días, según lo que necesite tu viaje o evento."}},
+      {"@type":"Question","name":"¿Cómo se confirma mi reserva?","acceptedAnswer":{"@type":"Answer","text":"Tu solicitud queda apartada como pendiente en cuanto la envías. La reserva se confirma cuando el personal te responde por WhatsApp."}},
+      {"@type":"Question","name":"¿El kilometraje es libre?","acceptedAnswer":{"@type":"Answer","text":"Sí, dentro del área metropolitana. Si tu viaje sale de esa zona, lo acordamos contigo antes de confirmar."}},
+      {"@type":"Question","name":"¿Hacen traslados al aeropuerto de Mérida?","acceptedAnswer":{"@type":"Answer","text":"Sí, coordinamos traslados de grupo al aeropuerto con espacio para pasajeros y equipaje."}}
+    ]
+  }
+  </script>
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Anton&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css?v=seo-responsive-20260920">
+
+  <!-- Google Analytics (GA4): reemplaza G-XXXXXXXXXX por tu ID de medición real. -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-XXXXXXXXXX');
+  </script>
 </head>
 <body class="home-page">
   <header class="site-header">
@@ -53,7 +77,6 @@
     <button class="menu-button" aria-label="Abrir menú" aria-expanded="false" aria-controls="main-navigation">☰</button>
     <nav class="main-nav" id="main-navigation" aria-label="Navegación principal">
       <a href="index.html" aria-current="page">Inicio</a><a href="flota.html">Flota</a><a href="disponibilidad.html">Disponibilidad</a><a href="requisitos.html">Requisitos</a><a href="contacto.html">Contacto</a>
-      <a class="text-button staff-open" href="disponibilidad.html?admin=1">Personal</a>
       <a class="button button-small whatsapp-link" data-message="Hola, quisiera información sobre la renta de una Nissan Urvan." target="_blank" rel="noopener">WhatsApp</a>
     </nav>
   </header>
@@ -62,7 +85,7 @@
     <section id="inicio" class="hero-showcase">
       <div class="showcase-stage">
         <h1 class="showcase-headline"><span>Renta tu Urvan</span><span>por día o por viaje</span></h1>
-        <img class="showcase-photo" src="urvan-hero.png" alt="Nissan Urvan blanca para renta con puerta lateral abierta y equipaje de playa" width="2000" height="1125">
+        <img class="showcase-photo" src="urvan-hero.webp" alt="Nissan Urvan blanca para renta con puerta lateral abierta y equipaje de playa" width="2000" height="1125">
         <aside class="showcase-badge">
           <strong>15</strong>
           <div>
@@ -134,9 +157,24 @@
 
     <section id="requisitos" class="section-shell requirements"><div class="section-heading"><p class="eyebrow">ANTES DE RENTAR</p><h2>Requisitos sencillos, viaje tranquilo</h2></div><div class="requirements-grid"><article><h3>Edad mínima</h3><p>25 años cumplidos.</p></article><article><h3>Licencia vigente</h3><p>Licencia de conducir no vencida.</p></article><article><h3>Identificación oficial</h3><p>INE o pasaporte vigente.</p></article><article><h3>Depósito en garantía</h3><p>Reembolsable al devolver la unidad.</p></article></div><div class="policy"><h3>Políticas de uso</h3><p>La unidad se entrega y se devuelve con el mismo nivel de combustible. El kilometraje es libre dentro del área metropolitana. Las fechas y horario de entrega se confirman por WhatsApp.</p></div></section>
 
+    <section id="faq" class="section-shell faq-section" aria-labelledby="faq-title">
+      <div class="section-heading section-heading-centered">
+        <p class="eyebrow">PREGUNTAS FRECUENTES</p>
+        <h2 id="faq-title">Antes de reservar, resuelve tus dudas</h2>
+      </div>
+      <div class="faq-list">
+        <details class="faq-item"><summary>¿Cuál es la edad mínima para rentar una Urvan?</summary><p>25 años cumplidos, con licencia de conducir vigente e identificación oficial (INE o pasaporte).</p></details>
+        <details class="faq-item"><summary>¿Qué documentos necesito para rentar?</summary><p>Licencia de conducir vigente, identificación oficial (INE o pasaporte) y un depósito en garantía reembolsable al devolver la unidad.</p></details>
+        <details class="faq-item"><summary>¿Puedo rentar la Urvan por un solo día?</summary><p>Sí. Rentamos por día o por varios días, según lo que necesite tu viaje o evento.</p></details>
+        <details class="faq-item"><summary>¿Cómo se confirma mi reserva?</summary><p>Tu solicitud queda apartada como pendiente en cuanto la envías. La reserva se confirma cuando el personal te responde por WhatsApp.</p></details>
+        <details class="faq-item"><summary>¿El kilometraje es libre?</summary><p>Sí, dentro del área metropolitana. Si tu viaje sale de esa zona, lo acordamos contigo antes de confirmar.</p></details>
+        <details class="faq-item"><summary>¿Hacen traslados al aeropuerto de Mérida?</summary><p>Sí, coordinamos traslados de grupo al aeropuerto con espacio para pasajeros y equipaje.</p></details>
+      </div>
+    </section>
+
     <section class="section-shell final-cta" aria-labelledby="cta-title"><div><p class="eyebrow">TURI EXPRESS MX</p><h2 id="cta-title">¿Listo para tu próximo viaje?</h2><p>Cuéntanos a dónde vas y las fechas que necesitas. Te ayudamos a organizar el traslado de tu grupo.</p></div><div class="actions"><a class="button" href="disponibilidad.html">Consultar disponibilidad</a><a class="button button-outline whatsapp-link" data-message="Hola, quiero cotizar una Nissan Urvan para mi próximo viaje." target="_blank" rel="noopener">Hablar por WhatsApp</a></div></section>
   </main>
-  <footer id="contacto"><div><a class="brand" href="#inicio">TURI EXPRESS <span>MX</span></a><p>Renta de Nissan Urvan para grupos y traslados.</p></div><div><h3>Horario</h3><p>Lun–Dom · 8:00–20:00</p></div><div><h3>¿Listo para viajar?</h3><a class="button whatsapp-link" data-message="Hola, quisiera información sobre la renta de una Nissan Urvan." target="_blank" rel="noopener">Hablar por WhatsApp</a></div><div><h3>Legal</h3><p><a class="footer-link" href="aviso-privacidad.html">Aviso de privacidad</a></p><p><a class="footer-link" href="terminos.html">Términos y condiciones</a></p><p><button type="button" class="text-button staff-open footer-staff-open">Acceso de personal</button></p></div><small>© <span id="year"></span> TURI EXPRESS MX. Todos los derechos reservados.</small></footer>
+  <footer id="contacto"></footer>
 
   <div id="staff-modal" class="modal-overlay" hidden>
     <div class="modal-panel">
