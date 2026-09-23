@@ -60,7 +60,7 @@ function setupStaffGesture() {
       return;
     }
 
-    tapTimer = setTimeout(() => { tapCount = 0; window.location.href = targetHref; }, 500);
+    tapTimer = setTimeout(() => { tapCount = 0; window.location.href = targetHref; }, 900);
   });
 }
 setupStaffGesture();
