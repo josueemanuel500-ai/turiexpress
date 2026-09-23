@@ -26,7 +26,7 @@ const state = {
   end: null,
   bookings: [],       // {unit_id, start_date, end_date} público, sin datos del cliente
   staffBookings: [],  // filas completas, solo visibles para personal autenticado
-  staffUnitId: 1,
+  staffUnitId: 'all', // 'all' | 1 | 2 | 3: qué lista de ocupaciones se muestra
   pickerField: null,  // 'start' | 'end' | null: qué selector de fecha del panel de personal está abierto
   pickerMonth: new Date(today.getFullYear(), today.getMonth(), 1),
   adminStart: null,   // fecha ISO elegida en el picker del panel de personal
@@ -207,6 +207,11 @@ document.querySelector('#staff-logout').addEventListener('click', async () => { 
 function renderUnitTabs() {
   const wrap = document.querySelector('#staff-unit-tabs');
   wrap.innerHTML = '';
+  const allBtn = document.createElement('button');
+  allBtn.type = 'button'; allBtn.textContent = 'Todas';
+  allBtn.className = 'unit-tab' + (state.staffUnitId === 'all' ? ' active' : '');
+  allBtn.addEventListener('click', () => { state.staffUnitId = 'all'; renderStaffBookings(); });
+  wrap.append(allBtn);
   UNITS.forEach(u => {
     const btn = document.createElement('button');
     btn.type = 'button'; btn.textContent = u.name;
@@ -226,27 +231,37 @@ function renderStaffBookings() {
   renderUnitTabs();
   const list = document.querySelector('#staff-bookings-list');
   list.innerHTML = '';
-  const rows = state.staffBookings.filter(b => b.unit_id === state.staffUnitId);
-  if (!rows.length) { list.innerHTML = '<p class="fine-print">Sin ocupaciones registradas para esta unidad.</p>'; return; }
+  const showingAll = state.staffUnitId === 'all';
+  const rows = showingAll ? state.staffBookings : state.staffBookings.filter(b => b.unit_id === state.staffUnitId);
+  if (!rows.length) { list.innerHTML = `<p class="fine-print">Sin ocupaciones registradas${showingAll ? '' : ' para esta unidad'}.</p>`; return; }
   rows.forEach(b => {
     const digits = (b.client_phone || '').replace(/\D/g, '');
     const intl = digits.length === 10 ? `52${digits}` : digits;
+    const unitName = UNITS.find(u => u.id === b.unit_id)?.name || '';
     const row = document.createElement('div');
     row.className = 'staff-booking-row';
     row.innerHTML = `
       <div class="staff-row-info">
-        <strong>${b.client_name}</strong>${b.pending ? ' <span class="badge-pending">Por confirmar</span>' : ''}
+        <strong>${b.client_name}</strong>${b.pending ? ' <span class="badge-pending">Por confirmar</span>' : ''}${showingAll ? ` <span class="badge-unit">${unitName}</span>` : ''}
         <div class="staff-row-meta">${humanDate(parseISO(b.start_date))} → ${humanDate(parseISO(b.end_date))}</div>
         <div class="staff-row-meta">${b.client_phone || 'Sin teléfono'}</div>
         ${b.note ? `<div class="staff-row-meta">${b.note}</div>` : ''}
       </div>
       <div class="staff-row-actions">
+        ${b.pending ? '<button type="button" class="button-confirm">Confirmar</button>' : ''}
         ${digits.length >= 10 ? `<a class="button button-small" href="https://wa.me/${intl}" target="_blank" rel="noopener">WhatsApp</a>` : ''}
         <button type="button" class="button-danger">Eliminar</button>
       </div>`;
+    if (b.pending) row.querySelector('.button-confirm').addEventListener('click', () => confirmBooking(b.id));
     row.querySelector('.button-danger').addEventListener('click', () => removeBooking(b.id));
     list.append(row);
   });
+}
+
+async function confirmBooking(id) {
+  const { error } = await db.from('bookings').update({ pending: false }).eq('id', id);
+  if (error) { window.alert('No se pudo confirmar la reserva. Intenta de nuevo.'); return; }
+  await loadStaffBookings();
 }
 
 async function removeBooking(id) {
@@ -279,7 +294,8 @@ function renderPicker() {
   const year = month.getFullYear(), number = month.getMonth();
   const first = (new Date(year, number, 1).getDay() + 6) % 7;
   const count = new Date(year, number + 1, 0).getDate();
-  const unitBookings = state.staffBookings.filter(b => b.unit_id === state.staffUnitId);
+  const selectedUnitId = Number(document.querySelector('#admin-unit-select').value);
+  const unitBookings = state.staffBookings.filter(b => b.unit_id === selectedUnitId);
   const weekdayLabels = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
   let daysHTML = '';
   for (let i = 0; i < first; i++) daysHTML += '<span></span>';
@@ -332,6 +348,7 @@ document.querySelector('#admin-start-toggle').addEventListener(
 document.querySelector('#admin-end-toggle').addEventListener(
   'click', event => toggleStaffDatePicker('end', event), true,
 );
+document.querySelector('#admin-unit-select').addEventListener('change', () => { if (state.pickerField) renderPicker(); });
 
 document.querySelector('#staff-add-booking').addEventListener('click', async () => {
   const clientName = document.querySelector('#admin-client-name').value.trim();
@@ -344,8 +361,9 @@ document.querySelector('#staff-add-booking').addEventListener('click', async () 
   if (!clientName) { errorEl.textContent = 'Escribe el nombre del cliente.'; return; }
   if (clientPhone.replace(/\D/g, '').length < 10) { errorEl.textContent = 'Escribe un teléfono válido.'; return; }
 
+  const unitId = Number(document.querySelector('#admin-unit-select').value);
   const { error } = await db.from('bookings').insert({
-    unit_id: state.staffUnitId, start_date: state.adminStart, end_date: state.adminEnd,
+    unit_id: unitId, start_date: state.adminStart, end_date: state.adminEnd,
     client_name: clientName, client_phone: clientPhone, note: note || null,
   });
   if (error) { errorEl.textContent = 'Ya existe una ocupación que se cruza con esas fechas.'; return; }

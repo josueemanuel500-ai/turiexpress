@@ -103,6 +103,14 @@ create policy "staff can delete bookings"
   to authenticated
   using (true);
 
+-- Permite al personal marcar una reserva pública como confirmada (pending
+-- true -> false) o corregir un dato capturado, sin borrar y recapturar la fila.
+create policy "staff can update bookings"
+  on public.bookings for update
+  to authenticated
+  using (true)
+  with check (true);
+
 -- Public-safe view: exposes only date ranges, never customer PII, for the
 -- public availability calendar. Intentionally SECURITY DEFINER (default for
 -- views) so it can read the underlying table despite the anon-restrictive RLS
@@ -116,7 +124,7 @@ comment on view public.public_availability is
 grant select on public.public_availability to anon, authenticated;
 grant select on public.units to anon, authenticated;
 grant insert on public.bookings to anon, authenticated;
-grant select, delete on public.bookings to authenticated;
+grant select, update, delete on public.bookings to authenticated;
 
 -- ============================================================
 -- Retención de datos: borrado automático a los 12 meses

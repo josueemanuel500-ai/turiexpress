@@ -25,7 +25,7 @@
 .modal-close{border:0;background:none;font-size:22px;color:var(--muted);cursor:pointer;line-height:1}
 .modal-hint{color:var(--muted);font-size:13px;margin:0 0 18px}
 #staff-login-form label,.staff-add-card label{display:block;margin:12px 0 0;font-size:13px;font-weight:800}
-#staff-login-form input,.staff-add-card input{display:block;width:100%;margin-top:5px;padding:10px 12px;border:1px solid #cfe4e5;border-radius:9px;font:400 14px Manrope}
+#staff-login-form input,.staff-add-card input,.staff-add-card select{display:block;width:100%;margin-top:5px;padding:10px 12px;border:1px solid #cfe4e5;border-radius:9px;font:400 14px Manrope;background:#fff;color:var(--ink)}
 .picker-field{position:relative}
 .picker-toggle{display:block;width:100%;margin-top:5px;padding:10px 12px;border:1px solid #cfe4e5;border-radius:9px;font:400 14px Manrope;background:#fff;color:var(--ink);text-align:left;cursor:pointer}
 .picker-box{position:absolute;top:calc(100% + 6px);left:0;z-index:80;width:min(280px,84vw);box-sizing:border-box;background:#fff;border:1px solid #d8ecec;border-radius:14px;padding:12px;box-shadow:0 14px 34px #0b7a7b2e}
@@ -55,7 +55,9 @@
 .staff-row-actions{display:flex;gap:8px;align-items:center}
 .staff-row-actions .button{padding:8px 14px;font-size:12px}
 .button-danger{border:0;background:#fdecec;color:#b23b3b;padding:8px 14px;border-radius:9px;font:700 12px Manrope;cursor:pointer}
+.button-confirm{border:0;background:#e3f7f7;color:var(--teal);padding:8px 14px;border-radius:9px;font:700 12px Manrope;cursor:pointer}
 .badge-pending{display:inline-block;background:#fff3d6;color:#8a5a00;font-size:11px;font-weight:800;padding:2px 8px;border-radius:999px;margin-left:6px}
+.badge-unit{display:inline-block;background:#e3f7f7;color:var(--teal);font-size:11px;font-weight:800;padding:2px 8px;border-radius:999px;margin-left:6px}
 @media(max-width:480px){.staff-fields-grid{grid-template-columns:1fr}.modal-panel{padding:20px}.fleet-details ul{grid-template-columns:1fr}}
 .legal-page{max-width:780px;margin:auto;padding:64px 28px 80px}
 .legal-page h1{margin:0 0 6px;font-size:clamp(32px,4vw,44px);letter-spacing:-1.5px}
