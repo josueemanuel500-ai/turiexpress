@@ -216,7 +216,15 @@ function renderUnitTabs() {
     const btn = document.createElement('button');
     btn.type = 'button'; btn.textContent = u.name;
     btn.className = 'unit-tab' + (state.staffUnitId === u.id ? ' active' : '');
-    btn.addEventListener('click', () => { state.staffUnitId = u.id; renderStaffBookings(); });
+    btn.addEventListener('click', () => {
+      state.staffUnitId = u.id;
+      // La pestaña también decide a qué unidad se agrega una ocupación nueva,
+      // así el selector del formulario no se siente como un control aparte.
+      const unitSelect = document.querySelector('#admin-unit-select');
+      unitSelect.value = String(u.id);
+      unitSelect.dispatchEvent(new Event('change'));
+      renderStaffBookings();
+    });
     wrap.append(btn);
   });
 }
