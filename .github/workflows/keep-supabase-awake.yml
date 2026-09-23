@@ -1,0 +1,22 @@
+name: Keep Supabase awake
+
+# Los proyectos de Supabase en el plan gratuito se pausan solos tras ~1 semana
+# sin actividad, y la primera consulta después de la pausa tarda uno o dos
+# minutos en "despertar" la base de datos (por eso el calendario se sentía
+# pegado). Este workflow hace una lectura mínima a la API cada día para que
+# nunca se acumule esa semana de inactividad.
+
+on:
+  schedule:
+    - cron: '0 12 * * *' # todos los días a las 12:00 UTC (06:00 en Mérida)
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase REST API
+        run: |
+          curl -sf "https://wccrvrnyrsxkccwfqbae.supabase.co/rest/v1/units?select=id&limit=1" \
+            -H "apikey: sb_publishable_9nAIxg3Y3uSKVKSw823HgQ_by2ZOexw" \
+            -H "Authorization: Bearer sb_publishable_9nAIxg3Y3uSKVKSw823HgQ_by2ZOexw"
