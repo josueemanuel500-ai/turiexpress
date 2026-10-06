@@ -8,3 +8,8 @@ uploads/
 
 # Configuración local de Claude Code
 .claude/
+
+# API local: dependencias, compilados y secretos
+server/node_modules/
+server/dist/
+server/.env
