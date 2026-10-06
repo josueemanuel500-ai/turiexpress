@@ -10,7 +10,7 @@ const env = z.object({ DATABASE_URL: z.string().url(), JWT_SECRET: z.string().mi
 const pool = new Pool({ connectionString: env.DATABASE_URL, max: 10 });
 const app = Fastify({ logger: true });
 await app.register(helmet, { contentSecurityPolicy: false });
-await app.register(cors, { origin: [env.PUBLIC_ORIGIN, 'https://operacion.turiexpress.mx'], credentials: true });
+await app.register(cors, { origin: [env.PUBLIC_ORIGIN, 'https://operacion.turiexpress.com.mx'], credentials: true });
 await app.register(rateLimit, { global: true, max: 150, timeWindow: '1 minute' });
 await app.register(jwt, { secret: env.JWT_SECRET });
 app.get('/v1/health', async () => ({ ok: true }));

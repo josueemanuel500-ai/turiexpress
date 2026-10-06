@@ -1,7 +1,7 @@
 # Despliegue de la API
 
 La API escucha solo en `127.0.0.1:3000`. El único acceso externo debe ser el
-túnel de Cloudflare configurado para `api.turiexpress.mx`.
+túnel de Cloudflare configurado para `api.turiexpress.com.mx`.
 
 1. Crear la base de datos y ejecutar `migrations/001_reservations.sql`.
 2. Copiar `.env.example` como `.env` y sustituir todos los secretos.
