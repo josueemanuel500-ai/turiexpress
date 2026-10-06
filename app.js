@@ -10,8 +10,11 @@ document.addEventListener('contextmenu', event => event.preventDefault());
 const SUPABASE_URL = 'https://wccrvrnyrsxkccwfqbae.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_9nAIxg3Y3uSKVKSw823HgQ_by2ZOexw';
 const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// Las solicitudes públicas ya no se escriben en el navegador: llegan a la API
+// propia, que las registra con folio y aplica límites contra abuso.
+const API_BASE = 'https://api.turiexpress.com.mx/v1';
 
-const UNITS = [{ id: 1, name: 'Unidad 1' }, { id: 2, name: 'Unidad 2' }, { id: 3, name: 'Unidad 3' }];
+let UNITS = [{ id: 'loading-1', name: 'Unidad 1' }, { id: 'loading-2', name: 'Unidad 2' }, { id: 'loading-3', name: 'Unidad 3' }];
 const months = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
 const today = new Date(); today.setHours(0, 0, 0, 0);
 
@@ -38,8 +41,24 @@ function freeUnitsFor(startISO, endISO, bookings) {
 }
 
 async function loadPublicAvailability() {
-  const { data, error } = await db.from('public_availability').select('unit_id,start_date,end_date');
-  if (!error && data) state.bookings = data;
+  const from = new Date(state.month.getFullYear(), state.month.getMonth(), 1).toISOString();
+  const to = new Date(state.month.getFullYear(), state.month.getMonth() + 2, 1).toISOString();
+  try {
+    const response = await fetch(`${API_BASE}/public/availability?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+    if (!response.ok) throw new Error('availability request failed');
+    const { data } = await response.json();
+    const vehicles = new Map();
+    state.bookings = data.filter(row => row.starts_at).map(row => {
+      vehicles.set(row.id, { id: row.id, name: row.name, capacity: row.capacity });
+      return { unit_id: row.id, start_date: row.starts_at.slice(0, 10), end_date: row.ends_at.slice(0, 10) };
+    });
+    data.forEach(row => vehicles.set(row.id, { id: row.id, name: row.name, capacity: row.capacity }));
+    UNITS = [...vehicles.values()];
+  } catch (_error) {
+    // Conserva una vista útil mientras la red se recupera; no se confirma nada
+    // hasta que la API responda en el envío del formulario.
+    state.bookings = [];
+  }
   renderCalendar();
 }
 
@@ -92,8 +111,8 @@ function updateSubmitState() {
         : 'Escribe tu nombre y teléfono para continuar.'));
 }
 
-document.querySelector('#previous-month').onclick = () => { state.month = new Date(state.month.getFullYear(), state.month.getMonth() - 1, 1); renderCalendar(); };
-document.querySelector('#next-month').onclick = () => { state.month = new Date(state.month.getFullYear(), state.month.getMonth() + 1, 1); renderCalendar(); };
+document.querySelector('#previous-month').onclick = () => { state.month = new Date(state.month.getFullYear(), state.month.getMonth() - 1, 1); loadPublicAvailability(); };
+document.querySelector('#next-month').onclick = () => { state.month = new Date(state.month.getFullYear(), state.month.getMonth() + 1, 1); loadPublicAvailability(); };
 document.querySelector('#clear-dates').onclick = () => { state.start = null; state.end = null; renderCalendar(); };
 document.querySelector('#name').addEventListener('input', updateSubmitState);
 document.querySelector('#phone').addEventListener('input', updateSubmitState);
@@ -117,11 +136,26 @@ document.querySelector('#booking-form').addEventListener('submit', async event =
   const whatsappTab = window.open('', '_blank', 'noopener');
 
   submitButton.disabled = true;
-  const { error } = await db.from('bookings').insert({
-    unit_id: free.id, start_date: startISO, end_date: endISO, client_name: name, client_phone: phone,
-  });
+  let response;
+  try {
+    response = await fetch(`${API_BASE}/public/reservations`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        service: 'rental',
+        starts_at: `${startISO}T09:00:00.000-06:00`,
+        ends_at: `${endISO}T18:00:00.000-06:00`,
+        pickup: 'Por confirmar con el cliente',
+        passengers: 1,
+        client_name: name,
+        client_phone: phone,
+      }),
+    });
+  } catch (_error) {
+    response = null;
+  }
   submitButton.disabled = false;
-  if (error) {
+  if (!response || !response.ok) {
     if (whatsappTab) whatsappTab.close();
     message.textContent = 'No se pudo registrar el apartado. Intenta de nuevo.';
     await loadPublicAvailability();
