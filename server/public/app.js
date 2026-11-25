@@ -1,9 +1,9 @@
 // Panel de Turi Express. Sin dependencias ni compilación: módulos nativos del navegador.
 // La sesión vive en una cookie httpOnly (el JavaScript nunca ve el token).
 
-import { ic, hydrateIcons } from './icons.js?v=3';
+import { ic, hydrateIcons } from './icons.js?v=4';
 
-const APP_VERSION = '1.1.0'; // Versión del panel; debe coincidir con version.json al desplegar.
+const APP_VERSION = '1.1.1'; // Versión del panel; debe coincidir con version.json al desplegar.
 const TZ = 'America/Merida';
 const OFFSET_H = 6; // Mérida: UTC-6 todo el año
 const $ = (s, el = document) => el.querySelector(s);
@@ -149,20 +149,31 @@ async function route() {
   $('#fab').hidden = !['inicio', 'reservas', 'calendario', 'clientes'].includes(name) || Boolean(id);
   const ticket = ++currentRender;
   const el = $('#view');
-  el.innerHTML = '<div class="empty"><div class="spinner" style="margin:auto"></div></div>';
+  // Misma pantalla (cambiar de mes, guardar…): se queda el contenido actual mientras cargan los datos
+  // nuevos, sin parpadeo ni salto al inicio. Otra pantalla: el indicador solo aparece si tarda.
+  const key = `${name}/${id ?? ''}`;
+  const samePage = key === lastRouteKey && el.childElementCount > 0;
+  lastRouteKey = key;
+  el.classList.add('loading');
+  const spinner = samePage ? null : setTimeout(() => {
+    if (ticket === currentRender) el.innerHTML = '<div class="empty"><div class="spinner" style="margin:auto"></div></div>';
+  }, 300);
   try {
     const html = await view.render(id, params);
     if (ticket !== currentRender) return;
     el.innerHTML = html;
     view.after?.(el, id, params);
-    el.focus({ preventScroll: true });
-    window.scrollTo(0, 0);
+    if (!samePage) { el.focus({ preventScroll: true }); window.scrollTo(0, 0); }
   } catch (error) {
     if (error.expired || ticket !== currentRender) return;
     el.innerHTML = `<div class="empty">${esc(error.message)}<br><br><button class="btn" data-action="reload-view">Reintentar</button></div>`;
+  } finally {
+    clearTimeout(spinner);
+    if (ticket === currentRender) el.classList.remove('loading');
   }
   refreshBadge();
 }
+let lastRouteKey = '';
 window.addEventListener('hashchange', route);
 
 async function refreshBadge() {
@@ -755,7 +766,7 @@ views.ajustes = {
     const p = state.pricing, b = state.business;
     return `
       <div class="view-head"><h1>Ajustes</h1></div>
-      ${updateCard()}
+      ${androidApp ? updateCard() : ''}
       ${admin ? `
       <form id="pricing" class="card section stack">
         <h2 class="with-ic">${ic('coin')}Tarifas</h2>
@@ -878,17 +889,16 @@ const newer = (a, b) => {
   return false;
 };
 
+/** Solo se muestra dentro de la app Android: en el navegador el panel siempre está al día. */
 function updateCard() {
-  const where = androidApp ? `App Android ${esc(androidApp)}` : STANDALONE ? (IOS ? 'App de iPhone' : 'App instalada') : 'Navegador';
   return `
     <div class="card section stack" id="update-card">
       <h2 class="with-ic">${ic('refresh')}Actualización de la app</h2>
       <dl class="dl">
         <div><dt>Versión del panel</dt><dd><strong>${APP_VERSION}</strong></dd></div>
-        <div><dt>Instalada en</dt><dd>${where}</dd></div>
+        <div><dt>App Android</dt><dd><strong>${esc(androidApp)}</strong></dd></div>
       </dl>
       <p id="update-status" class="muted">Toca el botón para buscar la versión más reciente.</p>
-      ${!STANDALONE && IOS ? `<p class="banner info">Para instalarla en iPhone: en Safari toca <strong>Compartir</strong> y luego <strong>Agregar a inicio</strong>.</p>` : ''}
       <div class="actions" id="update-actions">
         <button class="btn primary" data-action="update-check">${ic('refresh')}Buscar actualización</button>
       </div>
