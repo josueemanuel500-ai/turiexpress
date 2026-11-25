@@ -1,0 +1,57 @@
+{
+  "packageId": "mx.com.turiexpress.panel",
+  "host": "panel.turiexpress.com.mx",
+  "name": "Turi Express · Panel",
+  "launcherName": "Turi Panel",
+  "display": "standalone",
+  "themeColor": "#0B7A7B",
+  "themeColorDark": "#000000",
+  "navigationColor": "#FFFFFF",
+  "navigationColorDark": "#000000",
+  "navigationDividerColor": "#000000",
+  "navigationDividerColorDark": "#000000",
+  "backgroundColor": "#F4FDFD",
+  "enableNotifications": true,
+  "startUrl": "/#/inicio",
+  "iconUrl": "https://api.turiexpress.com.mx/icons/icon-512.png",
+  "maskableIconUrl": "https://api.turiexpress.com.mx/icons/maskable-512.png",
+  "monochromeIconUrl": "https://api.turiexpress.com.mx/icons/badge-96.png",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "../../android-firma/turiexpress-panel.jks",
+    "alias": "turipanel"
+  },
+  "appVersionName": "1.0.0",
+  "appVersionCode": 1,
+  "shortcuts": [
+    {
+      "name": "Nueva renta",
+      "shortName": "Nueva",
+      "url": "/#/nueva",
+      "chosenIconUrl": "https://api.turiexpress.com.mx/icons/icon-192.png"
+    },
+    {
+      "name": "Solicitudes",
+      "shortName": "Solicitudes",
+      "url": "/#/reservas?f=solicitudes",
+      "chosenIconUrl": "https://api.turiexpress.com.mx/icons/icon-192.png"
+    }
+  ],
+  "generatorApp": "unknown",
+  "webManifestUrl": "https://api.turiexpress.com.mx/manifest.webmanifest",
+  "fallbackType": "customtabs",
+  "features": {},
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": false,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "minSdkVersion": 23,
+  "orientation": "portrait",
+  "fingerprints": [],
+  "additionalTrustedOrigins": [],
+  "retainedBundles": [],
+  "displayOverride": [],
+  "appVersion": "1.0.0"
+}
