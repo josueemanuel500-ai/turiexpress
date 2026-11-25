@@ -26,18 +26,21 @@ Las solicitudes se guardan en Supabase (para la disponibilidad compartida) y ade
 - `og-image.jpg` (1200×630): imagen que se muestra al compartir el enlace en WhatsApp, Facebook, LinkedIn y X.
 - Las fotos (`urvan-hero.webp`, `urvan-flota.webp`) están en WebP para que pesen poco. Si agregas una foto nueva, expórtala en WebP (calidad ~80) en vez de PNG: un PNG de una foto puede pesar 10-20 veces más sin verse mejor.
 
-## Acceso de personal
+## Sistema de rentas (API propia)
 
-No hay ningún enlace visible al panel de personal en el sitio. Se abre tocando 4 veces seguidas el logo "TURI EXPRESS" del encabezado (en menos de medio segundo entre toques): en `index.html`/`disponibilidad.html` abre el panel directamente; en el resto de páginas navega a `disponibilidad.html?admin=1`, que lo abre automáticamente. También puedes ir directo a esa URL.
+Las solicitudes, la disponibilidad y el panel de administración funcionan con la API propia en el
+servidor Proxmox (`server/`), publicada en `https://api.turiexpress.com.mx`. Supabase ya no se usa.
 
-## Disponibilidad y panel de personal (Supabase)
+- **Panel de personal:** `https://api.turiexpress.com.mx/`, o 4 toques rápidos sobre el logo del sitio.
+  Ahí se ven los ingresos, gastos y utilidad, qué unidad está rentada o libre, los clientes y los contratos en PDF.
+- **App:** el panel se instala como app (en iPhone: Safari → Compartir → Agregar a inicio) y avisa con
+  notificaciones cuando llega una solicitud nueva.
+- **Usuarios:** se dan de alta desde el panel → Ajustes → Usuarios (solo administradores).
+- **Tarifas:** panel → Ajustes → Tarifas. El sitio muestra un estimado con esas tarifas.
 
-El calendario público y el panel de "Personal" usan un proyecto de Supabase (`SUPABASE_URL` / `SUPABASE_ANON_KEY` en `app.js`) con dos tablas: `units` (las 3 Nissan Urvan) y `bookings` (solicitudes públicas y ocupaciones cargadas por el personal). El esquema completo, con las políticas de seguridad (RLS), está documentado en [`supabase/schema.sql`](supabase/schema.sql).
+Instalación, despliegue y respaldos: [`server/deploy/README.md`](server/deploy/README.md).
 
-Cómo funciona la seguridad:
-- Cualquier visitante puede ver qué fechas están ocupadas (sin nombre ni teléfono del cliente) y enviar una solicitud — queda guardada como `pending` hasta que el personal la revise.
-- Solo el personal con sesión iniciada puede ver el nombre/teléfono/nota de cada reserva, agregar ocupaciones manuales o eliminar reservas.
-- La clave publicada en `app.js` es segura de exponer: el control de acceso real está en las políticas de la base de datos, no en ocultar la clave.
+El archivo `supabase/schema.sql` queda solo como referencia histórica.
 
 ## Páginas legales y retención de datos
 
@@ -45,7 +48,7 @@ Cómo funciona la seguridad:
 - [`terminos.html`](terminos.html): términos y condiciones del servicio de renta.
 - El formulario de solicitud enlaza a ambas páginas antes de enviar.
 
-**El borrado a los 12 meses está implementado de verdad**, no solo escrito: la función `public.delete_expired_bookings()` corre todos los días a las 09:00 UTC mediante `pg_cron` (job `delete-expired-bookings`). Ver [`supabase/schema.sql`](supabase/schema.sql).
+**El borrado a los 12 meses está implementado:** cada madrugada (3:00 de Mérida) la API anonimiza las rentas que terminaron hace más de 12 meses (se conservan fechas y montos para la contabilidad) y elimina las fichas de clientes sin rentas recientes. Ver `server/src/reminders.ts`.
 
 Para revisar el estado del borrado automático:
 

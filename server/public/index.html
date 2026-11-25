@@ -1,1 +1,56 @@
-<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Turi Express | Operación</title><link rel="stylesheet" href="/app.css"><body><main id="login"><p>OPERACIÓN · TURI EXPRESS</p><h1>Reservaciones</h1><form><input id="email" type="email" placeholder="Correo" required><input id="password" type="password" placeholder="Contraseña" required><button>Entrar</button><small id="error"></small></form></main><main id="panel" hidden><header><div><p>OPERACIÓN EN VIVO</p><h1>Solicitudes</h1></div><button id="logout">Cerrar sesión</button></header><nav><select id="status"><option value="">Todos los estados</option><option value="new">Nuevas</option><option value="quoted">Cotizadas</option><option value="confirmed">Confirmadas</option><option value="assigned">Asignadas</option><option value="completed">Completadas</option><option value="cancelled">Canceladas</option></select><button id="refresh">Actualizar</button></nav><section id="list"></section></main><dialog id="detail"><button id="close">×</button><div id="content"></div></dialog><script src="/app.js"></script></body></html>
+<!doctype html>
+<html lang="es-MX">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#0b7a7b">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Turi Panel">
+  <title>Turi Express · Panel</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icons/icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="/app.css?v=2">
+  <script src="/app.js?v=2" type="module"></script>
+</head>
+<body>
+  <div id="boot" class="boot"><div class="spinner"></div></div>
+
+  <section id="login" class="login" hidden>
+    <form id="login-form" class="login-card" novalidate>
+      <div class="login-logo">TE</div>
+      <h1>Panel Turi Express</h1>
+      <p class="muted">Acceso solo para personal autorizado.</p>
+      <label>Correo<input name="email" type="email" autocomplete="username" required inputmode="email"></label>
+      <label>Contraseña
+        <span class="pw-wrap"><input name="password" type="password" autocomplete="current-password" required>
+          <button type="button" class="pw-toggle" data-action="toggle-pw" aria-label="Mostrar contraseña">👁</button></span>
+      </label>
+      <p id="login-error" class="form-error" role="alert" hidden></p>
+      <button class="btn primary block" type="submit">Entrar</button>
+    </form>
+  </section>
+
+  <div id="app" class="shell" hidden>
+    <aside class="sidebar">
+      <div class="side-brand"><span class="logo-dot">TE</span><div><strong>Turi Express</strong><small id="me-name"></small></div></div>
+      <nav class="nav" id="nav">
+        <a href="#/inicio" data-nav="inicio"><span>📊</span>Inicio</a>
+        <a href="#/reservas" data-nav="reservas"><span>📋</span>Rentas<b class="badge" id="pending-badge" hidden></b></a>
+        <a href="#/calendario" data-nav="calendario"><span>📅</span>Calendario</a>
+        <a href="#/clientes" data-nav="clientes"><span>👥</span>Clientes</a>
+        <a href="#/gastos" data-nav="gastos"><span>💸</span>Gastos</a>
+        <a href="#/ajustes" data-nav="ajustes"><span>⚙️</span>Ajustes</a>
+      </nav>
+    </aside>
+    <main id="view" class="view" tabindex="-1"></main>
+    <a href="#/nueva" class="fab" id="fab" aria-label="Nueva renta">＋</a>
+  </div>
+
+  <div id="modal" class="modal" hidden><div class="modal-card" id="modal-card"></div></div>
+  <div id="toast" class="toast" role="status" hidden></div>
+</body>
+</html>

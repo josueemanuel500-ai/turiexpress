@@ -60,7 +60,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Anton&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=seo-responsive-20260920">
+  <link rel="stylesheet" href="styles.css?v=20261125">
 
   <!-- Google Analytics (GA4): reemplaza G-XXXXXXXXXX por tu ID de medición real. -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
@@ -151,7 +151,7 @@
     <section id="disponibilidad" class="booking-section">
       <div class="section-shell"><div class="section-heading"><p class="eyebrow">DISPONIBILIDAD</p><h2>Disponibilidad y solicitud de renta</h2><p>Todas nuestras unidades son Nissan Urvan. Revisa el calendario y elige tus fechas: si una está ocupada, te asignamos otra libre automáticamente.</p></div>
         <div class="booking-grid"><div class="calendar-card"><div class="calendar-top"><button id="previous-month" aria-label="Mes anterior">‹</button><h3 id="calendar-title"></h3><button id="next-month" aria-label="Mes siguiente">›</button></div><div class="weekdays"><span>Lun</span><span>Mar</span><span>Mié</span><span>Jue</span><span>Vie</span><span>Sáb</span><span>Dom</span></div><div id="calendar-days" class="calendar-days" aria-live="polite"></div><div class="calendar-legend"><span><i class="dot dot-free"></i>Disponible</span><span><i class="dot dot-full"></i>Ocupado</span><span><i class="dot dot-selected"></i>Tu selección</span></div></div>
-          <form id="booking-form" class="booking-form"><h3>Solicita tu Nissan Urvan</h3><p class="form-hint">Da clic en el calendario: primero tu fecha de inicio, luego la de fin.</p><div class="date-summary"><div><small>INICIO</small><strong id="start-display">Elige una fecha</strong></div><div><small>FIN</small><strong id="end-display">Elige una fecha</strong></div></div><button id="clear-dates" class="text-link" type="button">Elegir de nuevo</button><label>Tu nombre<input id="name" name="name" autocomplete="name" placeholder="Ej. Juan Pérez" required></label><label>Tu teléfono (WhatsApp)<input id="phone" name="phone" autocomplete="tel" inputmode="tel" placeholder="Ej. 33 1234 5678" required></label><p id="form-message" class="form-message" role="alert"></p><button class="button" type="submit" id="submit-request" disabled>Apartar y enviar por WhatsApp</button><p id="submit-hint" class="fine-print">Elige tus fechas y escribe tu nombre y teléfono.</p><p class="consent-note">Al enviar tu solicitud aceptas nuestros <a href="terminos.html">Términos y Condiciones</a> y el <a href="aviso-privacidad.html">Aviso de Privacidad</a>. Usamos tu nombre y teléfono solo para confirmar tu renta, no los compartimos con terceros y los eliminamos 12 meses después.</p></form></div>
+          <form id="booking-form" class="booking-form"><h3>Solicita tu Nissan Urvan</h3><p class="form-hint">Da clic en el calendario: primero tu fecha de inicio, luego la de fin.</p><div class="date-summary"><div><small>INICIO</small><strong id="start-display">Elige una fecha</strong></div><div><small>FIN</small><strong id="end-display">Elige una fecha</strong></div></div><button id="clear-dates" class="text-link" type="button">Elegir de nuevo</button><label>Tu nombre<input id="name" name="name" autocomplete="name" placeholder="Ej. Juan Pérez" required></label><label>Tu teléfono (WhatsApp)<input id="phone" name="phone" autocomplete="tel" inputmode="tel" placeholder="Ej. 33 1234 5678" required></label><div id="price-estimate" class="price-estimate" hidden></div><input type="text" name="website" id="website" class="hp-field" tabindex="-1" autocomplete="off" aria-hidden="true"><p id="form-message" class="form-message" role="alert"></p><button class="button" type="submit" id="submit-request" disabled>Apartar y enviar por WhatsApp</button><p id="submit-hint" class="fine-print">Elige tus fechas y escribe tu nombre y teléfono.</p><p class="consent-note">Al enviar tu solicitud aceptas nuestros <a href="terminos.html">Términos y Condiciones</a> y el <a href="aviso-privacidad.html">Aviso de Privacidad</a>. Usamos tu nombre y teléfono solo para confirmar tu renta, no los compartimos con terceros y los eliminamos 12 meses después.</p></form></div>
       </div>
     </section>
 
@@ -175,64 +175,6 @@
     <section class="section-shell final-cta" aria-labelledby="cta-title"><div><p class="eyebrow">TURI EXPRESS MX</p><h2 id="cta-title">¿Listo para tu próximo viaje?</h2><p>Cuéntanos a dónde vas y las fechas que necesitas. Te ayudamos a organizar el traslado de tu grupo.</p></div><div class="actions"><a class="button" href="disponibilidad.html">Consultar disponibilidad</a><a class="button button-outline whatsapp-link" data-message="Hola, quiero cotizar una Nissan Urvan para mi próximo viaje." target="_blank" rel="noopener">Hablar por WhatsApp</a></div></section>
   </main>
   <footer id="contacto"></footer>
-
-  <div id="staff-modal" class="modal-overlay" hidden>
-    <div class="modal-panel">
-      <div class="modal-head">
-        <h3 id="staff-modal-title">Acceso de personal</h3>
-        <button type="button" class="modal-close" id="staff-close" aria-label="Cerrar">×</button>
-      </div>
-
-      <div id="staff-login-view">
-        <p class="modal-hint">Inicia sesión con tu cuenta de personal para gestionar la disponibilidad.</p>
-        <form id="staff-login-form">
-          <label>Correo<input id="staff-email" type="email" autocomplete="username" required></label>
-          <label>Contraseña<input id="staff-password" type="password" autocomplete="current-password" required></label>
-          <p id="staff-login-error" class="form-message" role="alert"></p>
-          <button class="button" type="submit">Entrar</button>
-        </form>
-        <p class="fine-print">¿No tienes cuenta? Pídele al administrador que te dé de alta desde el panel de Supabase.</p>
-      </div>
-
-      <div id="staff-panel-view" hidden>
-        <div class="staff-session-row">
-          <span id="staff-session-label"></span>
-          <button type="button" class="text-button" id="staff-logout">Salir</button>
-        </div>
-
-        <div class="unit-tabs" id="staff-unit-tabs"></div>
-
-        <div class="staff-add-card">
-          <h4>Agregar ocupación</h4>
-          <label>Unidad<select id="admin-unit-select"><option value="1">Unidad 1</option><option value="2">Unidad 2</option><option value="3">Unidad 3</option></select></label>
-          <div class="staff-fields-grid">
-            <div class="picker-field">
-              <label>Inicio</label>
-              <button type="button" class="picker-toggle" id="admin-start-toggle">Selecciona fecha</button>
-              <div class="picker-box" id="admin-start-picker" hidden></div>
-            </div>
-            <div class="picker-field">
-              <label>Fin</label>
-              <button type="button" class="picker-toggle" id="admin-end-toggle">Selecciona fecha</button>
-              <div class="picker-box" id="admin-end-picker" hidden></div>
-            </div>
-          </div>
-          <div class="staff-fields-grid">
-            <label>Nombre del cliente<input type="text" id="admin-client-name" placeholder="Ej. Juan Pérez"></label>
-            <label>Teléfono<input type="tel" id="admin-client-phone" placeholder="Ej. 33 1234 5678"></label>
-          </div>
-          <label>Nota interna (opcional)<input type="text" id="admin-note"></label>
-          <p id="staff-add-error" class="form-message" role="alert"></p>
-          <button class="button" type="button" id="staff-add-booking">Agregar ocupación</button>
-        </div>
-
-        <h4>Ocupaciones registradas</h4>
-        <div id="staff-bookings-list" class="staff-bookings-list"></div>
-      </div>
-    </div>
-  </div>
-
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="app.js?v=seo-responsive-20260920"></script>
+  <script src="legal.js?v=20261125"></script><script src="app.js?v=20261125"></script>
 </body>
 </html>
