@@ -71,6 +71,17 @@ await app.register(fastifyStatic, {
     if (path.endsWith('assetlinks.json')) res.header('content-type', 'application/json');
   },
 });
+// Digital Asset Links: vincula la app Android (TWA) con este dominio para abrir el panel
+// a pantalla completa, sin barra del navegador. La huella es pública (no es un secreto).
+const ANDROID_APP = {
+  package: 'mx.com.turiexpress.panel',
+  sha256: ['7D:8B:F7:32:6C:14:66:2D:FF:FA:8E:BF:1B:A2:B4:D2:32:72:57:94:6F:E9:42:B2:FC:F0:A8:43:9B:3C:62:F6'],
+};
+app.get('/.well-known/assetlinks.json', async (_req, reply) => reply.header('cache-control', 'public, max-age=3600').send([{
+  relation: ['delegate_permission/common.handle_all_urls'],
+  target: { namespace: 'android_app', package_name: ANDROID_APP.package, sha256_cert_fingerprints: ANDROID_APP.sha256 },
+}]));
+
 await app.register(authRoutes);
 await app.register(publicRoutes);
 await app.register(opsRoutes);
