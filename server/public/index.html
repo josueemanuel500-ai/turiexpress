@@ -13,8 +13,8 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/icons/icon-192.png" type="image/png">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="/app.css?v=2">
-  <script src="/app.js?v=2" type="module"></script>
+  <link rel="stylesheet" href="/app.css?v=3">
+  <script src="/app.js?v=3" type="module"></script>
 </head>
 <body>
   <div id="boot" class="boot"><div class="spinner"></div></div>
@@ -27,7 +27,7 @@
       <label>Correo<input name="email" type="email" autocomplete="username" required inputmode="email"></label>
       <label>Contraseña
         <span class="pw-wrap"><input name="password" type="password" autocomplete="current-password" required>
-          <button type="button" class="pw-toggle" data-action="toggle-pw" aria-label="Mostrar contraseña">👁</button></span>
+          <button type="button" class="pw-toggle" data-action="toggle-pw" aria-label="Mostrar contraseña"><i data-icon="eye"></i></button></span>
       </label>
       <p id="login-error" class="form-error" role="alert" hidden></p>
       <button class="btn primary block" type="submit">Entrar</button>
@@ -38,16 +38,16 @@
     <aside class="sidebar">
       <div class="side-brand"><span class="logo-dot">TE</span><div><strong>Turi Express</strong><small id="me-name"></small></div></div>
       <nav class="nav" id="nav">
-        <a href="#/inicio" data-nav="inicio"><span>📊</span>Inicio</a>
-        <a href="#/reservas" data-nav="reservas"><span>📋</span>Rentas<b class="badge" id="pending-badge" hidden></b></a>
-        <a href="#/calendario" data-nav="calendario"><span>📅</span>Calendario</a>
-        <a href="#/clientes" data-nav="clientes"><span>👥</span>Clientes</a>
-        <a href="#/gastos" data-nav="gastos"><span>💸</span>Gastos</a>
-        <a href="#/ajustes" data-nav="ajustes"><span>⚙️</span>Ajustes</a>
+        <a href="#/inicio" data-nav="inicio"><i data-icon="home"></i><span>Inicio</span></a>
+        <a href="#/reservas" data-nav="reservas"><i data-icon="list"></i><span>Rentas</span><b class="badge" id="pending-badge" hidden></b></a>
+        <a href="#/calendario" data-nav="calendario"><i data-icon="calendar"></i><span>Calendario</span></a>
+        <a href="#/clientes" data-nav="clientes"><i data-icon="users"></i><span>Clientes</span></a>
+        <a href="#/gastos" data-nav="gastos"><i data-icon="wallet"></i><span>Gastos</span></a>
+        <a href="#/ajustes" data-nav="ajustes"><i data-icon="settings"></i><span>Ajustes</span></a>
       </nav>
     </aside>
     <main id="view" class="view" tabindex="-1"></main>
-    <a href="#/nueva" class="fab" id="fab" aria-label="Nueva renta">＋</a>
+    <a href="#/nueva" class="fab" id="fab" aria-label="Nueva renta"><i data-icon="plus"></i></a>
   </div>
 
   <div id="modal" class="modal" hidden><div class="modal-card" id="modal-card"></div></div>

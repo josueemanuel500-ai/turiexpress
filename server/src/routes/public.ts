@@ -84,6 +84,7 @@ export async function publicRoutes(app: FastifyInstance) {
       body: `${b.client_name} · ${b.start_date} → ${b.end_date} (${days} día${days === 1 ? '' : 's'}) · ${money(q.total_cents)}${result.blocked ? ' · ⚠ cliente bloqueado' : ''}`,
       url: `/#/reservas/${result.id}`,
       tag: `reservation-${result.id}`,
+      urgent: true,
     }, m => app.log.warn(m)).catch(error => app.log.error(error));
 
     return reply.code(201).send({

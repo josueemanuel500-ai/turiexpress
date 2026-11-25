@@ -46,9 +46,11 @@ public class LauncherActivity
     protected Uri getLaunchingUrl() {
         // Get the original launch Url.
         Uri uri = super.getLaunchingUrl();
-
-        
-
+        // Le dice al panel qué versión de la app está instalada (sección "Actualización").
+        try {
+            String version = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+            if (uri != null && version != null) uri = uri.buildUpon().appendQueryParameter("app", version).build();
+        } catch (Exception ignored) { }
         return uri;
     }
 }

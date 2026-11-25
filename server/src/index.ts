@@ -67,8 +67,17 @@ await app.register(fastifyStatic, {
   prefix: '/',
   setHeaders: (res, path) => {
     // El service worker y el HTML deben revalidarse siempre para que las actualizaciones lleguen.
-    if (/(sw\.js|index\.html|manifest\.webmanifest)$/.test(path)) res.header('cache-control', 'no-cache');
-    if (path.endsWith('assetlinks.json')) res.header('content-type', 'application/json');
+    if (/(sw\.js|index\.html|manifest\.webmanifest|version\.json)$/.test(path)) res.header('cache-control', 'no-cache');
+  },
+});
+// Instaladores de la app Android (APK). Se suben al servidor fuera de git: server/downloads/.
+await app.register(fastifyStatic, {
+  root: join(import.meta.dirname, '..', 'downloads'),
+  prefix: '/descargas/',
+  decorateReply: false,
+  setHeaders: res => {
+    res.header('content-type', 'application/vnd.android.package-archive');
+    res.header('cache-control', 'no-cache');
   },
 });
 // Digital Asset Links: vincula la app Android (TWA) con este dominio para abrir el panel

@@ -1,6 +1,9 @@
 // Panel de Turi Express. Sin dependencias ni compilación: módulos nativos del navegador.
 // La sesión vive en una cookie httpOnly (el JavaScript nunca ve el token).
 
+import { ic, hydrateIcons } from './icons.js?v=3';
+
+const APP_VERSION = '1.1.0'; // Versión del panel; debe coincidir con version.json al desplegar.
 const TZ = 'America/Merida';
 const OFFSET_H = 6; // Mérida: UTC-6 todo el año
 const $ = (s, el = document) => el.querySelector(s);
@@ -12,9 +15,10 @@ const STATUS = {
   cancelled: 'Cancelada', no_show: 'No se presentó',
 };
 const EXPENSE_CAT = {
-  fuel: '⛽ Gasolina', maintenance: '🔧 Mantenimiento', repair: '🛠 Reparación', insurance: '🛡 Seguro',
-  cleaning: '🧽 Limpieza', tolls: '🛣 Casetas', taxes: '🧾 Impuestos/tenencia', salary: '👤 Sueldos', other: '📦 Otro',
+  fuel: 'Gasolina', maintenance: 'Mantenimiento', repair: 'Reparación', insurance: 'Seguro',
+  cleaning: 'Limpieza', tolls: 'Casetas', taxes: 'Impuestos/tenencia', salary: 'Sueldos', other: 'Otro',
 };
+const EXPENSE_ICON = { fuel: 'fuel', maintenance: 'wrench', repair: 'hammer', insurance: 'shield', cleaning: 'sparkles', tolls: 'ticket', taxes: 'receipt', salary: 'user', other: 'box' };
 const PAY_KIND = { deposit: 'Anticipo', payment: 'Pago', refund: 'Reembolso' };
 const PAY_METHOD = { cash: 'Efectivo', transfer: 'Transferencia', card: 'Tarjeta', other: 'Otro' };
 const FUEL = ['Vacío', '1/4', '1/2', '3/4', 'Lleno'];
@@ -27,7 +31,7 @@ const FILTERS = {
   todas: { label: 'Todas', status: '' },
 };
 
-const state = { me: null, vehicles: [], pricing: {}, business: {}, push: {}, installPrompt: null };
+const state = { me: null, vehicles: [], pricing: {}, business: {}, push: {} };
 
 // ───────────────────────────── utilidades ─────────────────────────────
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -42,7 +46,11 @@ const toLocalInput = iso => new Date(new Date(iso).getTime() - OFFSET_H * 3600e3
 const fromLocalInput = v => new Date(`${v}:00-06:00`).toISOString();
 const monthLabel = ym => { const t = new Date(`${ym}-15T12:00:00-06:00`).toLocaleDateString('es-MX', { month: 'long', year: 'numeric' }); return t[0].toUpperCase() + t.slice(1); };
 const shiftMonth = (ym, n) => { const [y, m] = ym.split('-').map(Number); const d = new Date(Date.UTC(y, m - 1 + n, 1)); return d.toISOString().slice(0, 7); };
-const pill = s => `<span class="pill ${esc(s)}">${esc(STATUS[s] ?? s)}</span>`;
+const monthNav = (view, ym) => `<div class="month-nav">
+  <a class="btn sm icon" href="#/${view}?m=${shiftMonth(ym, -1)}" aria-label="Mes anterior">${ic('left')}</a>
+  <strong>${monthLabel(ym)}</strong>
+  <a class="btn sm icon" href="#/${view}?m=${shiftMonth(ym, 1)}" aria-label="Mes siguiente">${ic('right')}</a></div>`;
+const pill = s =>`<span class="pill ${esc(s)}">${esc(STATUS[s] ?? s)}</span>`;
 const wa = (phone, text) => `https://wa.me/${String(phone).replace(/\D/g, '')}?text=${encodeURIComponent(text)}`;
 function localQuote(a, b, daily, weekly, discount = 0) {
   const days = daysBetween(a, b), weeks = Math.floor(days / 7), rest = days % 7;
@@ -107,7 +115,8 @@ function showLogin(message) {
 onSubmit($('#login-form'), async data => {
   await api('/auth/login', { method: 'POST', body: { email: data.email, password: data.password } });
   $('#login-form').reset();
-  await start();
+  await hydrateIcons();
+start();
 });
 
 async function start() {
@@ -120,8 +129,9 @@ async function start() {
   }
   $('#me-name').textContent = state.me.name;
   $('#boot').hidden = true; $('#login').hidden = true; $('#app').hidden = false;
-  syncPush();
   route();
+  // Permiso y suscripción automáticos (en iPhone necesita un toque: aviso en Inicio).
+  ensurePush(!IOS).then(r => { if (r === 'granted' && $('#push-banner')) $('#push-banner').remove(); }).catch(() => {});
 }
 
 // ───────────────────────────── router ─────────────────────────────
@@ -135,7 +145,8 @@ async function route() {
   const params = Object.fromEntries(new URLSearchParams(query));
   const view = views[name] ?? views.inicio;
   $$('#nav a').forEach(a => a.classList.toggle('active', a.dataset.nav === (name === 'nueva' ? 'reservas' : name)));
-  $('#fab').hidden = ['nueva', 'editar'].includes(name);
+  // El botón flotante solo en las listas; en fichas y formularios estorbaría a los botones de abajo.
+  $('#fab').hidden = !['inicio', 'reservas', 'calendario', 'clientes'].includes(name) || Boolean(id);
   const ticket = ++currentRender;
   const el = $('#view');
   el.innerHTML = '<div class="empty"><div class="spinner" style="margin:auto"></div></div>';
@@ -185,7 +196,7 @@ views.inicio = {
     }).join('');
     const agenda = d.agenda.length ? d.agenda.map(a => `
       <a class="item" href="#/reservas/${a.id}">
-        <div><strong>${a.kind === 'pickup' ? '🚐 Entrega' : '🔁 Devolución'} · ${esc(a.client_name)}</strong>
+        <div><strong class="with-ic">${a.kind === 'pickup' ? `${ic('van')}Entrega` : `${ic('undo')}Devolución`} · ${esc(a.client_name)}</strong>
           <div class="meta">${fmtDT(a.at)} · ${esc(a.vehicle_name ?? 'Sin unidad')} · ${esc(a.folio)}</div></div>
         <div class="right">${new Date(a.at) < new Date() && a.kind === 'return' ? '<span class="pill bad">Atrasada</span>' : pill(a.status)}</div>
       </a>`).join('') : '<p class="empty">Sin entregas ni devoluciones en los próximos días.</p>';
@@ -193,13 +204,10 @@ views.inicio = {
     return `
       <div class="view-head">
         <h1>Hola, ${esc(state.me.name.split(' ')[0])}</h1>
-        <div class="row">
-          <a class="btn sm" href="#/inicio?m=${shiftMonth(month, -1)}">‹</a>
-          <strong>${monthLabel(month)}</strong>
-          <a class="btn sm" href="#/inicio?m=${shiftMonth(month, 1)}">›</a>
-        </div>
+        ${monthNav('inicio', month)}
       </div>
-      ${d.pending_requests ? `<a class="banner" href="#/reservas?f=solicitudes"><span>🔔 ${d.pending_requests} solicitud${d.pending_requests > 1 ? 'es' : ''} nueva${d.pending_requests > 1 ? 's' : ''} por atender</span><span>Ver ›</span></a>` : ''}
+      <div id="push-banner">${pushBanner()}</div>
+      ${d.pending_requests ? `<a class="banner" href="#/reservas?f=solicitudes"><span class="with-ic">${ic('bell')}${d.pending_requests} solicitud${d.pending_requests > 1 ? 'es' : ''} nueva${d.pending_requests > 1 ? 's' : ''} por atender</span><span class="with-ic">Ver${ic('right')}</span></a>` : ''}
       <div class="kpis section">
         <div class="kpi good"><small>Cobrado</small><strong>${mxn(d.income_cents)}</strong></div>
         <div class="kpi bad"><small>Gastos</small><strong>${mxn(d.expense_cents)}</strong></div>
@@ -245,7 +253,7 @@ views.reservas = {
     // Próximas primero en filtros de operación; historial en orden inverso.
     if (['solicitudes', 'activas', 'enrenta'].includes(f)) data.sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at));
     return `
-      <div class="view-head"><h1>Rentas</h1><a class="btn primary" href="#/nueva">＋ Nueva renta</a></div>
+      <div class="view-head"><h1>Rentas</h1><a class="btn primary" href="#/nueva">${ic('plus')}Nueva renta</a></div>
       <div class="chips">${Object.entries(FILTERS).map(([k, v]) => `<a class="chip ${k === f ? 'active' : ''}" href="#/reservas?f=${k}${q ? `&q=${encodeURIComponent(q)}` : ''}">${v.label}</a>`).join('')}</div>
       <form id="search" class="row" style="margin-bottom:12px"><input name="q" type="search" placeholder="Buscar por nombre, teléfono o folio" value="${esc(q)}"><input type="hidden" name="f" value="${f}"></form>
       <div class="list">${data.length ? data.map(reservationItem).join('') : '<p class="empty">No hay rentas en esta vista.</p>'}</div>`;
@@ -261,7 +269,7 @@ function reservationItem(r) {
   return `<a class="item" href="#/reservas/${r.id}">
     <div><strong>${esc(r.client_name)}</strong> <small class="muted">${esc(r.folio)}</small>
       <div class="meta">${fmtDT(r.starts_at)} → ${fmtDT(r.ends_at)}</div>
-      <div class="meta">${esc(r.vehicle_name ?? 'Sin unidad')} · ${daysBetween(r.starts_at, r.ends_at)} días${r.source === 'website' ? ' · 🌐 web' : ''}</div></div>
+      <div class="meta">${esc(r.vehicle_name ?? 'Sin unidad')} · ${daysBetween(r.starts_at, r.ends_at)} días${r.source === 'website' ? ' · web' : ''}</div></div>
     <div class="right">${pill(r.status)}<div class="amount">${mxn(r.quote_cents)}</div>
       ${r.balance_cents > 0 && !['cancelled', 'no_show', 'new', 'quoted'].includes(r.status) ? `<small class="amount due">Debe ${mxn(r.balance_cents)}</small>` : ''}</div>
   </a>`;
@@ -282,12 +290,12 @@ views.detalle = {
     };
     const actions = statusActions(r);
     return `
-      <a class="back" href="#/reservas">‹ Rentas</a>
+      <a class="back" href="#/reservas">${ic('left')}Rentas</a>
       <div class="view-head"><div><h1>${esc(r.client_name)}</h1><span class="muted">${esc(r.folio)} · ${r.source === 'website' ? 'Solicitud web' : 'Capturada por personal'}</span></div>${pill(r.status)}</div>
-      ${client?.blocked ? '<p class="form-error">⚠ Este cliente está marcado como bloqueado. Revisa sus notas antes de rentar.</p>' : ''}
+      ${client?.blocked ? `<p class="form-error with-ic">${ic('alert')}Este cliente está marcado como bloqueado. Revisa sus notas antes de rentar.</p>` : ''}
       <div class="actions">${actions}
-        <a class="btn" href="#/editar/${r.id}">✏️ Editar</a>
-        <button class="btn" data-action="contract" data-id="${r.id}" data-folio="${esc(r.folio)}">📄 Contrato PDF</button>
+        <a class="btn" href="#/editar/${r.id}">${ic('edit')}Editar</a>
+        <button class="btn" data-action="contract" data-id="${r.id}" data-folio="${esc(r.folio)}">${ic('file')}Contrato PDF</button>
       </div>
       <div class="section card">
         <dl class="dl">
@@ -299,7 +307,7 @@ views.detalle = {
           <div><dt>Teléfono</dt><dd><a href="tel:+${esc(r.client_phone)}">+${esc(r.client_phone)}</a></dd></div>
           ${r.km_out != null ? `<div><dt>Salida</dt><dd>${r.km_out} km · ${esc(r.fuel_out ?? '')}</dd></div>` : ''}
           ${r.km_in != null ? `<div><dt>Regreso</dt><dd>${r.km_in} km · ${esc(r.fuel_in ?? '')}${r.km_out != null ? ` (${r.km_in - r.km_out} km recorridos)` : ''}</dd></div>` : ''}
-          ${client ? `<div><dt>Cliente</dt><dd><a href="#/clientes/${client.id}">Ver ficha e historial ›</a></dd></div>` : ''}
+          ${client ? `<div><dt>Cliente</dt><dd><a href="#/clientes/${client.id}">Ver ficha e historial</a></dd></div>` : ''}
         </dl>
         ${r.notes ? `<p><small class="muted">Notas</small><br>${esc(r.notes)}</p>` : ''}
       </div>
@@ -310,11 +318,11 @@ views.detalle = {
           <a class="btn wa sm" target="_blank" rel="noopener" href="${wa(r.client_phone, msgs.remind)}">Recordar entrega</a>
           <a class="btn wa sm" target="_blank" rel="noopener" href="${wa(r.client_phone, msgs.return)}">Recordar devolución</a>
           ${r.balance_cents > 0 ? `<a class="btn wa sm" target="_blank" rel="noopener" href="${wa(r.client_phone, msgs.balance)}">Cobrar saldo</a>` : ''}
-          <a class="btn sm" target="_blank" rel="noopener" href="${wa(r.client_phone, '')}">Chat libre</a>
+          <a class="btn sm" target="_blank" rel="noopener" href="${wa(r.client_phone, '')}">${ic('chat')}Chat libre</a>
         </div>
       </div>
       <div class="section card">
-        <div class="row between"><h2>Cobro</h2><button class="btn sm primary" data-action="add-payment">＋ Registrar pago</button></div>
+        <div class="row between"><h2>Cobro</h2><button class="btn sm primary" data-action="add-payment">${ic('plus')}Registrar pago</button></div>
         <div class="money-box">
           <div class="line"><span>Tarifa</span><span>${mxn(r.daily_rate_cents)}/día · ${mxn(r.weekly_rate_cents)}/semana</span></div>
           ${r.discount_cents ? `<div class="line"><span>Descuento</span><span>−${mxn(r.discount_cents)}</span></div>` : ''}
@@ -326,13 +334,13 @@ views.detalle = {
         ${payments.length ? `<div class="table-wrap" style="margin-top:10px"><table><tbody>${payments.map(p => `
           <tr><td>${fmtD(p.paid_at)}</td><td>${PAY_KIND[p.kind]}</td><td>${PAY_METHOD[p.method]}</td>
             <td class="num ${p.kind === 'refund' ? 'amount due' : ''}">${p.kind === 'refund' ? '−' : ''}${mxn(p.amount_cents)}</td>
-            <td>${state.me.role === 'admin' ? `<button class="btn ghost sm" data-action="del-payment" data-id="${p.id}" aria-label="Eliminar pago">🗑</button>` : ''}</td></tr>`).join('')}
+            <td>${state.me.role === 'admin' ? `<button class="btn ghost sm" data-action="del-payment" data-id="${p.id}" aria-label="Eliminar pago">${ic('trash')}</button>` : ''}</td></tr>`).join('')}
         </tbody></table></div>` : '<p class="muted">Sin pagos registrados.</p>'}
       </div>
       <div class="section card">
         <h2>Historial</h2>
         <ul class="timeline">${events.map(e => `<li><strong>${esc(eventLabel(e))}</strong> · ${esc(e.actor)}<br><small class="muted">${fmtDT(e.occurred_at)}</small></li>`).join('')}</ul>
-        ${state.me.role === 'admin' ? `<p style="margin-top:14px"><button class="btn danger sm" data-action="delete-reservation" data-id="${r.id}">Eliminar renta definitivamente</button></p>` : ''}
+        ${state.me.role === 'admin' ? `<button class="btn danger block" style="margin-top:14px" data-action="delete-reservation" data-id="${r.id}">${ic('trash')}Eliminar renta definitivamente</button>` : ''}
       </div>`;
   },
   after() {},
@@ -351,11 +359,11 @@ function statusActions(r) {
   const btn = (status, label, cls = '') => `<button class="btn ${cls}" data-action="status" data-status="${status}">${label}</button>`;
   switch (r.status) {
     case 'new': case 'quoted':
-      return btn('confirmed', '✅ Confirmar', 'primary') + btn('cancelled', 'Rechazar', 'danger');
+      return btn('confirmed', `${ic('check')}Confirmar`, 'primary') + btn('cancelled', `${ic('x')}Rechazar`, 'danger');
     case 'confirmed': case 'assigned': case 'hold': case 'deposit_pending':
-      return btn('in_service', '🚐 Entregar unidad', 'primary') + btn('no_show', 'No se presentó') + btn('cancelled', 'Cancelar', 'danger');
+      return btn('in_service', `${ic('van')}Entregar unidad`, 'primary') + btn('no_show', 'No se presentó') + btn('cancelled', `${ic('x')}Cancelar`, 'danger');
     case 'in_service':
-      return btn('completed', '🔁 Recibir unidad', 'primary');
+      return btn('completed', `${ic('undo')}Recibir unidad`, 'primary');
     case 'completed':
       return r.guarantee_cents && !r.guarantee_returned ? '<button class="btn" data-action="guarantee">Marcar garantía devuelta</button>' : '';
     default:
@@ -469,7 +477,7 @@ function reservationForm(existing, params = {}) {
   // Es "manual" si el total guardado no coincide con lo que darían las tarifas.
   const manual = Boolean(r) && r.quote_cents !== localQuote(r.starts_at, r.ends_at, r.daily_rate_cents, r.weekly_rate_cents, r.discount_cents);
   return `
-    <a class="back" href="${r ? `#/reservas/${r.id}` : '#/reservas'}">‹ ${r ? 'Volver' : 'Rentas'}</a>
+    <a class="back" href="${r ? `#/reservas/${r.id}` : '#/reservas'}">${ic('left')}${r ? 'Volver' : 'Rentas'}</a>
     <h1>${r ? `Editar ${esc(r.folio)}` : 'Nueva renta'}</h1>
     <form id="rform" class="stack section">
       <fieldset><legend>Cliente</legend>
@@ -564,14 +572,14 @@ function bindReservationForm(el, id) {
         const q = search.value.trim();
         if (q.length < 2) { box.hidden = true; return; }
         const { data } = await api(`/ops/clients?q=${encodeURIComponent(q)}`);
-        box.innerHTML = data.slice(0, 6).map((c, i) => `<button type="button" data-i="${i}"><strong>${esc(c.full_name)}</strong> · +${esc(c.phone)}${c.blocked ? ' ⚠ bloqueado' : ''}<br><small class="muted">${c.rentals} renta${c.rentals === 1 ? '' : 's'}</small></button>`).join('') || '<p class="muted" style="padding:10px;margin:0">Sin coincidencias: captura un cliente nuevo.</p>';
+        box.innerHTML = data.slice(0, 6).map((c, i) => `<button type="button" data-i="${i}"><strong>${esc(c.full_name)}</strong> · +${esc(c.phone)}${c.blocked ? ' · bloqueado' : ''}<br><small class="muted">${c.rentals} renta${c.rentals === 1 ? '' : 's'}</small></button>`).join('') || '<p class="muted" style="padding:10px;margin:0">Sin coincidencias: captura un cliente nuevo.</p>';
         box.hidden = false;
         $$('button', box).forEach(b => b.addEventListener('click', () => {
           const c = data[Number(b.dataset.i)];
           for (const k of ['full_name', 'phone', 'id_document', 'license_number', 'license_expires', 'email', 'address']) if (form.elements[k]) form.elements[k].value = c[k] ?? '';
           if (c.id_document || c.license_number) $('details', form).open = true;
           box.hidden = true; search.value = '';
-          if (c.blocked) toast('⚠ Cliente bloqueado: revisa su ficha', true);
+          if (c.blocked) toast('Cliente bloqueado: revisa su ficha', true);
         }));
       }, 250);
     });
@@ -622,7 +630,7 @@ views.calendario = {
     const unassigned = data.filter(r => !r.vehicle_id && ['new', 'quoted'].includes(r.status));
     return `
       <div class="view-head"><h1>Calendario</h1>
-        <div class="row"><a class="btn sm" href="#/calendario?m=${shiftMonth(month, -1)}">‹</a><strong>${monthLabel(month)}</strong><a class="btn sm" href="#/calendario?m=${shiftMonth(month, 1)}">›</a></div></div>
+        ${monthNav('calendario', month)}</div>
       <div class="cal"><table><thead><tr><th class="unit-col">Unidad</th>${head}</tr></thead><tbody>${rows}</tbody></table></div>
       <div class="legend" style="flex-wrap:wrap">
         <span><i style="background:#e8a33a"></i>Solicitud</span><span><i style="background:#3b7be0"></i>Confirmada</span>
@@ -662,10 +670,10 @@ async function clientDetail(id) {
   const spent = done.reduce((s, r) => s + (r.quote_cents ?? 0), 0);
   const owed = done.reduce((s, r) => s + Math.max(0, r.balance_cents), 0);
   return `
-    <a class="back" href="#/clientes">‹ Clientes</a>
+    <a class="back" href="#/clientes">${ic('left')}Clientes</a>
     <div class="view-head"><h1>${esc(c.full_name)}</h1>
-      <div class="row"><a class="btn wa" target="_blank" rel="noopener" href="${wa(c.phone, `Hola ${c.full_name}, te escribimos de ${state.business.name || 'Turi Express'}.`)}">WhatsApp</a>
-      <a class="btn primary" href="#/nueva?client=${c.id}">＋ Rentar</a></div></div>
+      <div class="row"><a class="btn wa" target="_blank" rel="noopener" href="${wa(c.phone, `Hola ${c.full_name}, te escribimos de ${state.business.name || 'Turi Express'}.`)}">${ic('chat')}WhatsApp</a>
+      <a class="btn primary" href="#/nueva?client=${c.id}">${ic('plus')}Rentar</a></div></div>
     <div class="kpis">
       <div class="kpi"><small>Rentas</small><strong>${done.length}</strong></div>
       <div class="kpi good"><small>Total rentado</small><strong>${mxn(spent)}</strong></div>
@@ -684,7 +692,7 @@ async function clientDetail(id) {
       <label>Domicilio<input name="address" value="${esc(c.address ?? '')}"></label>
       <label>Notas internas<textarea name="notes" placeholder="Ej. cliente frecuente, entrega siempre en hotel…">${esc(c.notes ?? '')}</textarea></label>
       <label class="check"><input type="checkbox" name="blocked" ${c.blocked ? 'checked' : ''}> Bloquear cliente (no volver a rentar)</label>
-      ${c.license_expires && c.license_expires < localISODate() ? '<p class="form-error" style="display:block">⚠ La licencia registrada está vencida.</p>' : ''}
+      ${c.license_expires && c.license_expires < localISODate() ? `<p class="form-error with-ic">${ic('alert')}La licencia registrada está vencida.</p>` : ''}
       <p class="form-error" hidden></p>
       <div><button class="btn primary" type="submit">Guardar ficha</button></div>
     </form>
@@ -708,7 +716,7 @@ views.gastos = {
     this.month = month;
     return `
       <div class="view-head"><h1>Gastos</h1>
-        <div class="row"><a class="btn sm" href="#/gastos?m=${shiftMonth(month, -1)}">‹</a><strong>${monthLabel(month)}</strong><a class="btn sm" href="#/gastos?m=${shiftMonth(month, 1)}">›</a></div></div>
+        ${monthNav('gastos', month)}</div>
       <form id="eform" class="card stack">
         <h2>Registrar gasto</h2>
         <div class="grid2">
@@ -723,12 +731,12 @@ views.gastos = {
       </form>
       <div class="kpis section">
         <div class="kpi bad"><small>Total del mes</small><strong>${mxn(total)}</strong></div>
-        ${byCat.slice(0, 5).map(([k, v]) => `<div class="kpi"><small>${EXPENSE_CAT[k]}</small><strong>${mxn(v)}</strong></div>`).join('')}
+        ${byCat.slice(0, 5).map(([k, v]) => `<div class="kpi"><small class="with-ic">${ic(EXPENSE_ICON[k])}${EXPENSE_CAT[k]}</small><strong>${mxn(v)}</strong></div>`).join('')}
       </div>
       <div class="section list">${data.length ? data.map(e => `
-        <div class="item"><div><strong>${EXPENSE_CAT[e.category]}</strong> · ${esc(e.vehicle_name ?? 'General')}
-          <div class="meta">${fmtD(e.spent_on)}${e.description ? ` · ${esc(e.description)}` : ''} · ${esc(e.created_by_name ?? '')}</div></div>
-          <div class="right"><div class="amount">${mxn(e.amount_cents)}</div><button class="btn ghost sm" data-action="del-expense" data-id="${e.id}" aria-label="Eliminar gasto">🗑</button></div></div>`).join('')
+        <div class="item"><div><strong class="with-ic">${ic(EXPENSE_ICON[e.category])}${EXPENSE_CAT[e.category]}</strong>
+          <div class="meta">${esc(e.vehicle_name ?? 'General')} · ${fmtD(e.spent_on)}${e.description ? ` · ${esc(e.description)}` : ''} · ${esc(e.created_by_name ?? '')}</div></div>
+          <div class="right"><div class="amount">${mxn(e.amount_cents)}</div><button class="btn ghost sm" data-action="del-expense" data-id="${e.id}" aria-label="Eliminar gasto">${ic('trash')}</button></div></div>`).join('')
         : '<p class="empty">Sin gastos registrados este mes.</p>'}</div>`;
   },
   after(el) {
@@ -745,26 +753,12 @@ views.ajustes = {
     const admin = state.me.role === 'admin';
     const staff = admin ? (await api('/ops/staff')).data : [];
     const p = state.pricing, b = state.business;
-    const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
-    const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
-    const perm = 'Notification' in window ? Notification.permission : 'unsupported';
     return `
-      <h1>Ajustes</h1>
-      <div class="card section stack">
-        <h2>📲 App y notificaciones</h2>
-        ${!standalone ? (ios
-          ? '<p class="banner info">En iPhone: abre este panel en Safari, toca <strong>Compartir</strong> → <strong>Agregar a inicio</strong>, y abre la app desde el ícono. Las notificaciones solo funcionan así (iOS 16.4 o superior).</p>'
-          : `<p class="banner info">Instala el panel como app para recibir avisos de nuevas rentas.${state.installPrompt ? ' <button class="btn sm primary" data-action="install">Instalar</button>' : ''}</p>`) : ''}
-        <p>Estado en este dispositivo: <strong id="push-state">${!state.push.enabled ? 'Servidor sin claves de notificación' : perm === 'granted' ? 'Activadas ✅' : perm === 'denied' ? 'Bloqueadas en el navegador' : perm === 'unsupported' ? 'No disponible aquí' : 'Desactivadas'}</strong></p>
-        <div class="actions">
-          <button class="btn primary" data-action="push-on" ${!state.push.enabled ? 'disabled' : ''}>Activar notificaciones</button>
-          <button class="btn" data-action="push-test" ${!state.push.enabled ? 'disabled' : ''}>Enviar prueba</button>
-          <button class="btn" data-action="push-off">Desactivar en este dispositivo</button>
-        </div>
-      </div>
+      <div class="view-head"><h1>Ajustes</h1></div>
+      ${updateCard()}
       ${admin ? `
       <form id="pricing" class="card section stack">
-        <h2>💰 Tarifas</h2>
+        <h2 class="with-ic">${ic('coin')}Tarifas</h2>
         <div class="grid3">
           <label>Por día (MXN)<input name="daily" type="number" min="0" step="0.01" inputmode="decimal" value="${pesos(p.daily_cents)}"></label>
           <label>Por semana (MXN)<input name="weekly" type="number" min="0" step="0.01" inputmode="decimal" value="${pesos(p.weekly_cents)}"></label>
@@ -774,7 +768,7 @@ views.ajustes = {
         <p class="form-error" hidden></p><div><button class="btn primary" type="submit">Guardar tarifas</button></div>
       </form>
       <form id="business" class="card section stack">
-        <h2>🏢 Datos del negocio (contrato)</h2>
+        <h2 class="with-ic">${ic('building')}Datos del negocio (contrato)</h2>
         <div class="grid2">
           <label>Nombre comercial<input name="name" required value="${esc(b.name ?? '')}"></label>
           <label>Razón social / responsable<input name="legal_name" value="${esc(b.legal_name ?? '')}"></label>
@@ -785,18 +779,18 @@ views.ajustes = {
         <p class="form-error" hidden></p><div><button class="btn primary" type="submit">Guardar datos</button></div>
       </form>
       <div class="card section stack">
-        <h2>🚐 Unidades</h2>
-        <div class="list">${state.vehicles.map(v => `<button class="item" style="border:0;text-align:left;font:inherit;cursor:pointer" data-action="edit-vehicle" data-id="${v.id}">
-          <div><strong>${esc(v.name)}</strong> ${v.active ? '' : '<span class="pill bad">Inactiva</span>'}<div class="meta">${esc(v.plate || 'Sin placas')} · ${v.capacity} pasajeros${v.odometer_km ? ` · ${v.odometer_km.toLocaleString('es-MX')} km` : ''}</div></div><div class="right">✏️</div></button>`).join('')}</div>
+        <h2 class="with-ic">${ic('van')}Unidades</h2>
+        <div class="list">${state.vehicles.map(v => `<button class="item" data-action="edit-vehicle" data-id="${v.id}">
+          <div><strong>${esc(v.name)}</strong> ${v.active ? '' : '<span class="pill bad">Inactiva</span>'}<div class="meta">${esc(v.plate || 'Sin placas')} · ${v.capacity} pasajeros${v.odometer_km ? ` · ${v.odometer_km.toLocaleString('es-MX')} km` : ''}</div></div><div class="right muted">${ic('edit')}</div></button>`).join('')}</div>
       </div>
       <div class="card section stack">
-        <div class="row between"><h2>👤 Usuarios del panel</h2><button class="btn sm primary" data-action="new-staff">＋ Agregar</button></div>
-        <div class="list">${staff.map(s => `<button class="item" style="border:0;text-align:left;font:inherit;cursor:pointer" data-action="edit-staff" data-id="${s.id}">
+        <div class="row between"><h2 class="with-ic">${ic('users')}Usuarios del panel</h2><button class="btn sm primary" data-action="new-staff">${ic('plus')}Agregar</button></div>
+        <div class="list">${staff.map(s => `<button class="item" data-action="edit-staff" data-id="${s.id}">
           <div><strong>${esc(s.full_name)}</strong> ${s.active ? '' : '<span class="pill bad">Sin acceso</span>'}<div class="meta">${esc(s.email)} · ${s.role === 'admin' ? 'Administrador' : 'Operador'} · ${s.devices} dispositivo${s.devices === 1 ? '' : 's'} con avisos</div>
-          <div class="meta">${s.last_login_at ? `Último acceso ${fmtDT(s.last_login_at)}` : 'Nunca ha entrado'}</div></div><div class="right">✏️</div></button>`).join('')}</div>
+          <div class="meta">${s.last_login_at ? `Último acceso ${fmtDT(s.last_login_at)}` : 'Nunca ha entrado'}</div></div><div class="right muted">${ic('edit')}</div></button>`).join('')}</div>
       </div>` : ''}
       <form id="password" class="card section stack">
-        <h2>🔑 Cambiar mi contraseña</h2>
+        <h2 class="with-ic">${ic('key')}Cambiar mi contraseña</h2>
         <div class="grid2">
           <label>Contraseña actual<input name="current" type="password" autocomplete="current-password" required></label>
           <label>Nueva (mínimo 10 caracteres)<input name="next" type="password" autocomplete="new-password" minlength="10" required></label>
@@ -804,7 +798,7 @@ views.ajustes = {
         <p class="muted"><small>Al cambiarla se cierran tus sesiones en otros dispositivos.</small></p>
         <p class="form-error" hidden></p><div><button class="btn primary" type="submit">Cambiar contraseña</button></div>
       </form>
-      <div class="section"><button class="btn danger block" data-action="logout">Cerrar sesión (${esc(state.me.email)})</button></div>`;
+      <div class="section"><button class="btn danger block" data-action="logout">${ic('logout')}Cerrar sesión</button></div>`;
   },
   after(el) {
     const pricing = $('#pricing', el);
@@ -866,42 +860,100 @@ async function staffModal(id) {
   }));
 }
 
-// ───────────────────────────── Push ─────────────────────────────
+// ───────────────────────────── Actualización ─────────────────────────────
+// La app Android abre el panel con ?app=<versión>; se recuerda para mostrarla en Ajustes.
+const IOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+const STANDALONE = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+const androidApp = (() => {
+  const v = new URLSearchParams(location.search).get('app');
+  try {
+    if (v) localStorage.setItem('te_android_app', v);
+    else if (document.referrer.startsWith('android-app://') && !localStorage.getItem('te_android_app')) localStorage.setItem('te_android_app', '1.0.1');
+    return localStorage.getItem('te_android_app');
+  } catch { return v; }
+})();
+const newer = (a, b) => {
+  const pa = String(a).split('.').map(Number), pb = String(b).split('.').map(Number);
+  for (let i = 0; i < 3; i++) if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) > (pb[i] || 0);
+  return false;
+};
+
+function updateCard() {
+  const where = androidApp ? `App Android ${esc(androidApp)}` : STANDALONE ? (IOS ? 'App de iPhone' : 'App instalada') : 'Navegador';
+  return `
+    <div class="card section stack" id="update-card">
+      <h2 class="with-ic">${ic('refresh')}Actualización de la app</h2>
+      <dl class="dl">
+        <div><dt>Versión del panel</dt><dd><strong>${APP_VERSION}</strong></dd></div>
+        <div><dt>Instalada en</dt><dd>${where}</dd></div>
+      </dl>
+      <p id="update-status" class="muted">Toca el botón para buscar la versión más reciente.</p>
+      ${!STANDALONE && IOS ? `<p class="banner info">Para instalarla en iPhone: en Safari toca <strong>Compartir</strong> y luego <strong>Agregar a inicio</strong>.</p>` : ''}
+      <div class="actions" id="update-actions">
+        <button class="btn primary" data-action="update-check">${ic('refresh')}Buscar actualización</button>
+      </div>
+    </div>`;
+}
+
+async function checkUpdate() {
+  const status = $('#update-status'), actions = $('#update-actions');
+  status.textContent = 'Buscando…';
+  const reg = await navigator.serviceWorker?.getRegistration();
+  await reg?.update().catch(() => {});
+  const latest = await fetch('/version.json', { cache: 'no-store' }).then(r => r.json());
+  const panelOld = newer(latest.panel, APP_VERSION);
+  const apkOld = androidApp && latest.android && newer(latest.android.version, androidApp);
+  if (!panelOld && !apkOld) {
+    status.innerHTML = `${ic('check', 'ok')} Tienes la versión más reciente.`;
+    return;
+  }
+  const parts = [];
+  if (panelOld) parts.push(`Panel ${esc(latest.panel)} disponible.`);
+  if (apkOld) parts.push(`App Android ${esc(latest.android.version)} disponible: descárgala e instálala encima (no se borran tus datos).`);
+  status.textContent = parts.join(' ');
+  actions.innerHTML = `${panelOld ? `<button class="btn primary" data-action="update-apply">${ic('refresh')}Actualizar ahora</button>` : ''}
+    ${apkOld ? `<a class="btn ${panelOld ? '' : 'primary'}" href="${esc(latest.android.url)}" download>${ic('download')}Descargar app ${esc(latest.android.version)}</a>` : ''}`;
+}
+
+/** Borra el cascarón guardado y recarga: el service worker nuevo toma el control. */
+async function applyUpdate() {
+  const reg = await navigator.serviceWorker?.getRegistration();
+  reg?.waiting?.postMessage({ type: 'skip-waiting' });
+  if (window.caches) await Promise.all((await caches.keys()).map(k => caches.delete(k)));
+  location.reload();
+}
+
+// ───────────────────────────── Notificaciones ─────────────────────────────
+// Se activan solas al entrar: la app pide el permiso del sistema la primera vez.
+// En iPhone el permiso solo se puede pedir tras un toque, por eso ahí se muestra un aviso en Inicio.
 const b64ToBytes = b64 => {
   const pad = '='.repeat((4 - (b64.length % 4)) % 4);
   const raw = atob((b64 + pad).replace(/-/g, '+').replace(/_/g, '/'));
   return Uint8Array.from(raw, c => c.charCodeAt(0));
 };
+const pushSupported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 
-async function enablePush() {
-  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-    return toast(/iphone|ipad/i.test(navigator.userAgent) ? 'En iPhone primero agrega el panel a inicio y ábrelo desde el ícono' : 'Este navegador no soporta notificaciones', true);
-  }
-  const perm = await Notification.requestPermission();
-  if (perm !== 'granted') return toast('Permiso de notificaciones no concedido', true);
+async function ensurePush(ask) {
+  if (!state.push.enabled || !pushSupported()) return 'unsupported';
+  let perm = Notification.permission;
+  if (perm === 'default' && ask) perm = await Notification.requestPermission();
+  if (perm !== 'granted') return perm;
   const reg = await navigator.serviceWorker.ready;
-  const sub = await reg.pushManager.getSubscription() ?? await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(state.push.publicKey) });
+  const sub = await reg.pushManager.getSubscription()
+    ?? await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(state.push.publicKey) });
   await api('/ops/push/subscribe', { method: 'POST', body: sub.toJSON() });
-  toast('Notificaciones activadas en este dispositivo');
-  route();
+  return 'granted';
 }
 
-async function disablePush() {
-  const reg = await navigator.serviceWorker?.ready;
-  const sub = await reg?.pushManager?.getSubscription();
-  if (sub) { await api('/ops/push/unsubscribe', { method: 'POST', body: { endpoint: sub.endpoint } }).catch(() => {}); await sub.unsubscribe(); }
-  toast('Notificaciones desactivadas aquí');
-  route();
-}
-
-/** Si el permiso ya está concedido, reenvía la suscripción (el navegador puede rotarla). */
-async function syncPush() {
-  try {
-    if (!state.push.enabled || Notification.permission !== 'granted') return;
-    const reg = await navigator.serviceWorker.ready;
-    const sub = await reg.pushManager.getSubscription();
-    if (sub) await api('/ops/push/subscribe', { method: 'POST', body: sub.toJSON() });
-  } catch { /* opcional */ }
+function pushBanner() {
+  if (!state.push.enabled || !pushSupported()) {
+    return IOS && !STANDALONE ? `<div class="banner info"><span class="with-ic">${ic('bell')}Para recibir avisos en iPhone, agrega el panel a inicio desde Safari.</span></div>` : '';
+  }
+  if (Notification.permission === 'granted') return '';
+  if (Notification.permission === 'denied') {
+    return `<div class="banner"><span class="with-ic">${ic('bell')}Las notificaciones están bloqueadas. Actívalas en los ajustes del teléfono para esta app.</span></div>`;
+  }
+  return `<div class="banner info"><span class="with-ic">${ic('bell')}Activa los avisos de nuevas rentas en este dispositivo.</span><button class="btn sm primary" data-action="push-on">Activar</button></div>`;
 }
 
 // ───────────────────────────── acciones globales ─────────────────────────────
@@ -911,7 +963,11 @@ document.addEventListener('click', async e => {
   const a = el.dataset.action;
   const run = async fn => { try { el.disabled = true; await fn(); } catch (error) { if (!error.expired) toast(error.message, true); } finally { el.disabled = false; } };
   switch (a) {
-    case 'toggle-pw': { const i = el.previousElementSibling; i.type = i.type === 'password' ? 'text' : 'password'; break; }
+    case 'toggle-pw': {
+      const i = el.previousElementSibling; const show = i.type === 'password';
+      i.type = show ? 'text' : 'password'; el.innerHTML = ic(show ? 'eyeOff' : 'eye');
+      el.setAttribute('aria-label', show ? 'Ocultar contraseña' : 'Mostrar contraseña'); break;
+    }
     case 'reload': location.reload(); break;
     case 'reload-view': route(); break;
     case 'go': location.hash = el.dataset.href; break;
@@ -930,15 +986,17 @@ document.addEventListener('click', async e => {
     case 'edit-vehicle': vehicleModal(el.dataset.id); break;
     case 'new-staff': staffModal(null); break;
     case 'edit-staff': run(() => staffModal(el.dataset.id)); break;
-    case 'push-on': run(enablePush); break;
-    case 'push-off': run(disablePush); break;
-    case 'push-test': run(async () => { await api('/ops/push/test', { method: 'POST' }); toast('Prueba enviada: debe llegar en unos segundos'); }); break;
-    case 'install': state.installPrompt?.prompt(); state.installPrompt = null; break;
+    case 'push-on': run(async () => {
+      const r = await ensurePush(true);
+      toast(r === 'granted' ? 'Notificaciones activadas' : 'No se concedió el permiso de notificaciones', r !== 'granted');
+      $('#push-banner') && ($('#push-banner').innerHTML = pushBanner());
+    }); break;
+    case 'update-check': run(checkUpdate); break;
+    case 'update-apply': run(applyUpdate); break;
     case 'logout': run(async () => { await api('/auth/logout', { method: 'POST' }); showLogin(); }); break;
   }
 });
 
-window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); state.installPrompt = e; });
 window.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#modal').hidden) closeModal(); });
 
 if ('serviceWorker' in navigator) {
@@ -950,4 +1008,5 @@ if ('serviceWorker' in navigator) {
 // Al volver a la app, refresca datos (p. ej. tras una notificación).
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && state.me) refreshBadge(); });
 
+hydrateIcons();
 start();

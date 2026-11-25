@@ -5,7 +5,7 @@ import { env } from './env.js';
 export const pushEnabled = Boolean(env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY);
 if (pushEnabled) webpush.setVapidDetails(env.VAPID_SUBJECT, env.VAPID_PUBLIC_KEY!, env.VAPID_PRIVATE_KEY!);
 
-export type PushMessage = { title: string; body: string; url?: string; tag?: string };
+export type PushMessage = { title: string; body: string; url?: string; tag?: string; urgent?: boolean };
 
 /** Envía la notificación a todos los dispositivos del personal activo. */
 export async function notifyStaff(message: PushMessage, log?: (m: string) => void) {

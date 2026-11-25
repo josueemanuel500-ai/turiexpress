@@ -1,7 +1,7 @@
 // Service worker del panel: notificaciones push y carga offline del cascarón.
 // Los datos (/v1/*) nunca se guardan en caché: son privados y deben estar al día.
-const CACHE = 'turi-panel-v2';
-const SHELL = ['/', '/index.html', '/app.css?v=2', '/app.js?v=2', '/manifest.webmanifest', '/icons/icon-192.png'];
+const CACHE = 'turi-panel-v3';
+const SHELL = ['/', '/index.html', '/app.css?v=3', '/app.js?v=3', '/icons.js?v=3', '/manifest.webmanifest', '/icons/icon-192.png'];
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -31,6 +31,10 @@ self.addEventListener('fetch', event => {
   );
 });
 
+self.addEventListener('message', event => {
+  if (event.data?.type === 'skip-waiting') self.skipWaiting();
+});
+
 self.addEventListener('push', event => {
   let data = { title: 'Turi Express', body: 'Tienes una novedad', url: '/' };
   try { data = { ...data, ...event.data.json() }; } catch { /* texto plano */ }
@@ -39,10 +43,12 @@ self.addEventListener('push', event => {
       body: data.body,
       tag: data.tag,
       renotify: Boolean(data.tag),
+      silent: false, // con sonido
+      requireInteraction: Boolean(data.urgent), // las solicitudes nuevas se quedan hasta que las veas
       icon: '/icons/icon-192.png',
       badge: '/icons/badge-96.png',
       data: { url: data.url },
-      vibrate: [120, 60, 120],
+      vibrate: [350, 150, 350, 150, 600],
     }),
   );
 });
