@@ -114,7 +114,7 @@ export async function opsRoutes(app: FastifyInstance) {
     const range = `(($1 || '-01')::timestamp AT TIME ZONE '${TZ}')`;
     const rangeEnd = `((($1 || '-01')::date + interval '1 month')::timestamp AT TIME ZONE '${TZ}')`;
 
-    const [money, perVehicle, fleet, agenda, series, pending, outstanding] = await Promise.all([
+    const [money, perVehicle, fleet, agenda, series, pending, outstanding, byCategory] = await Promise.all([
       pool.query(
         `SELECT
            (SELECT COALESCE(SUM(CASE WHEN kind='refund' THEN -amount_cents ELSE amount_cents END),0)
@@ -186,6 +186,12 @@ export async function opsRoutes(app: FastifyInstance) {
            SELECT COALESCE(r.quote_cents,0) - COALESCE((SELECT SUM(CASE WHEN kind='refund' THEN -amount_cents ELSE amount_cents END) FROM payment WHERE reservation_id=r.id),0) AS balance
              FROM reservation r WHERE r.status IN ('confirmed','assigned','hold','deposit_pending','in_service','completed')) x`,
       ),
+      pool.query(
+        `SELECT category, SUM(amount_cents)::bigint AS amount_cents FROM expense
+          WHERE spent_on >= ($1 || '-01')::date AND spent_on < ($1 || '-01')::date + interval '1 month'
+          GROUP BY category ORDER BY 2 DESC`,
+        [month],
+      ),
     ]);
     const m = money.rows[0];
     const fleetDays = perVehicle.rows.length * m.days_in_month;
@@ -197,6 +203,8 @@ export async function opsRoutes(app: FastifyInstance) {
       profit_cents: m.income_cents - m.expense_cents,
       billed_cents: m.billed_cents,
       rentals: m.rentals,
+      days_in_month: m.days_in_month,
+      expense_by_category: byCategory.rows,
       occupancy: fleetDays ? Math.min(1, rentedDays / fleetDays) : 0,
       outstanding_cents: outstanding.rows[0].total,
       pending_requests: pending.rows[0].total,

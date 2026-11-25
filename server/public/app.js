@@ -1,9 +1,10 @@
 // Panel de Turi Express. Sin dependencias ni compilación: módulos nativos del navegador.
 // La sesión vive en una cookie httpOnly (el JavaScript nunca ve el token).
 
-import { ic, hydrateIcons } from './icons.js?v=4';
+import { ic, hydrateIcons } from './icons.js?v=5';
+import { mountCharts, hideTip, SERIES, OTHER } from './charts.js?v=5';
 
-const APP_VERSION = '1.1.1'; // Versión del panel; debe coincidir con version.json al desplegar.
+const APP_VERSION = '1.2.0'; // Versión del panel; debe coincidir con version.json al desplegar.
 const TZ = 'America/Merida';
 const OFFSET_H = 6; // Mérida: UTC-6 todo el año
 const $ = (s, el = document) => el.querySelector(s);
@@ -35,6 +36,7 @@ const state = { me: null, vehicles: [], pricing: {}, business: {}, push: {} };
 
 // ───────────────────────────── utilidades ─────────────────────────────
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const short = cents => { const v = (cents ?? 0) / 100; return Math.abs(v) >= 1e4 ? `$${Math.round(v / 1e3)}k` : Math.abs(v) >= 1e3 ? `$${(v / 1e3).toFixed(1).replace('.0', '')}k` : `$${Math.round(v)}`; };
 const mxn = cents => `$${((cents ?? 0) / 100).toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 const toCents = v => Math.round(Number(String(v).replace(/[^\d.]/g, '') || 0) * 100);
 const pesos = cents => (cents ?? 0) / 100;
@@ -140,6 +142,7 @@ let currentRender = 0;
 
 async function route() {
   if (!state.me) return;
+  hideTip();
   const [path, query = ''] = location.hash.replace(/^#\/?/, '').split('?');
   const [name = 'inicio', id] = path.split('/');
   const params = Object.fromEntries(new URLSearchParams(query));
@@ -190,7 +193,6 @@ views.inicio = {
   async render(_id, params) {
     const month = params.m || thisMonth();
     const d = await api(`/ops/dashboard?month=${month}`);
-    const max = Math.max(1, ...d.series.flatMap(s => [s.income_cents, s.expense_cents]));
     const fleet = d.fleet.map(v => {
       const rented = v.current_id && v.current_status === 'in_service';
       const reserved = v.current_id && !rented;
@@ -212,6 +214,36 @@ views.inicio = {
         <div class="right">${new Date(a.at) < new Date() && a.kind === 'return' ? '<span class="pill bad">Atrasada</span>' : pill(a.status)}</div>
       </a>`).join('') : '<p class="empty">Sin entregas ni devoluciones en los próximos días.</p>';
 
+    // ── Datos para las gráficas ──
+    const shortMonth = ym => new Date(`${ym}-15T12:00:00-06:00`).toLocaleDateString('es-MX', { month: 'short' }).replace('.', '');
+    const prev = d.series.at(-2);
+    const prevProfit = prev ? prev.income_cents - prev.expense_cents : 0;
+    const delta = d.profit_cents - prevProfit;
+    const cats = d.expense_by_category ?? [];
+    const top = cats.slice(0, 4).map((c, i) => ({ name: EXPENSE_CAT[c.category] ?? c.category, value: Number(c.amount_cents), color: SERIES[i] }));
+    const rest = cats.slice(4).reduce((t, c) => t + Number(c.amount_cents), 0);
+    if (rest) top.push({ name: 'Otros', value: rest, color: OTHER });
+    const days = d.days_in_month || 30;
+    const occPct = Math.round(d.occupancy * 100);
+    this.charts = {
+      trend: {
+        type: 'line', current: month, money: mxn,
+        months: d.series.map(s => ({ key: s.month, label: shortMonth(s.month), long: monthLabel(s.month) })),
+        series: [
+          { name: 'Cobrado', color: SERIES[0], values: d.series.map(s => Number(s.income_cents)) },
+          { name: 'Gastos', color: SERIES[1], values: d.series.map(s => Number(s.expense_cents)) },
+        ],
+      },
+      occ: {
+        type: 'donut', track: true, center: `${occPct}%`, sub: 'ocupación',
+        segments: [
+          { name: 'Días rentados', value: d.occupancy, color: SERIES[0], label: `${occPct}%` },
+          { name: 'Días libres', value: Math.max(0, 1 - d.occupancy), color: 'transparent', label: `${100 - occPct}%` },
+        ],
+      },
+      cats: { type: 'donut', money: mxn, center: short(d.expense_cents), sub: 'en gastos', segments: top },
+    };
+
     return `
       <div class="view-head">
         <h1>Hola, ${esc(state.me.name.split(' ')[0])}</h1>
@@ -219,36 +251,76 @@ views.inicio = {
       </div>
       <div id="push-banner">${pushBanner()}</div>
       ${d.pending_requests ? `<a class="banner" href="#/reservas?f=solicitudes"><span class="with-ic">${ic('bell')}${d.pending_requests} solicitud${d.pending_requests > 1 ? 'es' : ''} nueva${d.pending_requests > 1 ? 's' : ''} por atender</span><span class="with-ic">Ver${ic('right')}</span></a>` : ''}
-      <div class="kpis section">
-        <div class="kpi good"><small>Cobrado</small><strong>${mxn(d.income_cents)}</strong></div>
-        <div class="kpi bad"><small>Gastos</small><strong>${mxn(d.expense_cents)}</strong></div>
-        <div class="kpi ${d.profit_cents >= 0 ? 'good' : 'bad'}"><small>Utilidad</small><strong>${mxn(d.profit_cents)}</strong></div>
-        <div class="kpi warn"><small>Por cobrar</small><strong>${mxn(d.outstanding_cents)}</strong></div>
-        <div class="kpi"><small>Rentas del mes</small><strong>${d.rentals}</strong></div>
-        <div class="kpi"><small>Ocupación</small><strong>${Math.round(d.occupancy * 100)}%</strong></div>
+
+      <div class="dash-top section">
+        <div class="card hero">
+          <small>Utilidad de ${monthLabel(month).toLowerCase()}</small>
+          <strong class="hero-num ${d.profit_cents < 0 ? 'neg' : ''}">${mxn(d.profit_cents)}</strong>
+          ${prev ? `<span class="delta ${delta >= 0 ? 'up' : 'down'}">${ic(delta >= 0 ? 'trendUp' : 'trendDown')}${delta >= 0 ? '+' : '−'}${mxn(Math.abs(delta))} vs ${shortMonth(prev.month)}</span>` : ''}
+          <div class="split" aria-hidden="true">
+            <span style="flex:${Math.max(Number(d.income_cents), 0) || 0.0001};background:${SERIES[0]}"></span>
+            <span style="flex:${Number(d.expense_cents) || 0.0001};background:${SERIES[1]}"></span>
+          </div>
+          <div class="hero-legend">
+            <span><i style="background:${SERIES[0]}"></i>Cobrado<b>${mxn(d.income_cents)}</b></span>
+            <span><i style="background:${SERIES[1]}"></i>Gastos<b>${mxn(d.expense_cents)}</b></span>
+          </div>
+        </div>
+        <div class="kpis kpis-3">
+          <a class="kpi link" href="#/reservas?f=activas"><small>Por cobrar</small><strong>${mxn(d.outstanding_cents)}</strong><span class="kpi-note">saldo pendiente</span></a>
+          <div class="kpi"><small>Rentas del mes</small><strong>${d.rentals}</strong><span class="kpi-note">inician en el mes</span></div>
+          <div class="kpi"><small>Facturado</small><strong>${mxn(d.billed_cents)}</strong><span class="kpi-note">total de esas rentas</span></div>
+        </div>
       </div>
+
+      <div class="section card">
+        <div class="chart-head"><h2>Cobrado y gastos</h2><span class="muted">Últimos 6 meses</span></div>
+        <div class="chart-legend"><span><i style="background:${SERIES[0]}"></i>Cobrado</span><span><i style="background:${SERIES[1]}"></i>Gastos</span></div>
+        <div class="chart" data-chart="trend"></div>
+      </div>
+
+      <div class="donuts section">
+        <div class="card">
+          <div class="chart-head"><h2>Ocupación de la flota</h2><span class="muted">${days} días</span></div>
+          <div class="donut-wrap">
+            <div class="donut" data-chart="occ"></div>
+            <ul class="donut-legend">${d.per_vehicle.map(v => {
+              const pct = Math.min(100, Math.round((v.rented_days / days) * 100));
+              return `<li><div class="dl-row"><span>${esc(v.name)}</span><b>${pct}%</b></div>
+                <div class="meter"><span style="width:${pct}%"></span></div>
+                <small class="muted">${Math.round(v.rented_days)} de ${days} días rentada</small></li>`;
+            }).join('')}</ul>
+          </div>
+        </div>
+        <div class="card">
+          <div class="chart-head"><h2>Gastos por categoría</h2><a href="#/gastos?m=${month}">Ver gastos</a></div>
+          ${top.length ? `<div class="donut-wrap">
+            <div class="donut" data-chart="cats"></div>
+            <ul class="donut-legend">${top.map(c => `<li><div class="dl-row"><span class="with-ic"><i class="sw" style="background:${c.color}"></i>${esc(c.name)}</span><b>${mxn(c.value)}</b></div>
+              <small class="muted">${Math.round((c.value / Math.max(1, d.expense_cents)) * 100)}% del total</small></li>`).join('')}</ul>
+          </div>` : `<p class="empty">Sin gastos registrados en ${monthLabel(month).toLowerCase()}.</p>`}
+        </div>
+      </div>
+
       <div class="section"><h2>Unidades ahora</h2><div class="fleet">${fleet}</div></div>
       <div class="section"><h2>Agenda próxima</h2><div class="list">${agenda}</div></div>
+
       <div class="section card">
-        <h2>Ingresos vs gastos (6 meses)</h2>
-        <div class="bars">${d.series.map(s => `
-          <div class="bar-col" title="${monthLabel(s.month)}: cobrado ${mxn(s.income_cents)} · gastos ${mxn(s.expense_cents)}">
-            <div class="bar-pair"><div class="bar in" style="height:${(s.income_cents / max) * 100}%"></div><div class="bar out" style="height:${(s.expense_cents / max) * 100}%"></div></div>
-            <span>${new Date(`${s.month}-15T12:00:00-06:00`).toLocaleDateString('es-MX', { month: 'short' })}</span>
-          </div>`).join('')}</div>
-        <div class="legend"><span><i style="background:var(--bright)"></i>Cobrado</span><span><i style="background:#f0a39a"></i>Gastos</span></div>
-      </div>
-      <div class="section card">
-        <h2>Por unidad · ${monthLabel(month)}</h2>
-        <div class="table-wrap"><table>
-          <thead><tr><th>Unidad</th><th class="num">Días rentada</th><th class="num">Cobrado</th><th class="num">Gastos</th><th class="num">Utilidad</th></tr></thead>
+        <div class="chart-head"><h2>Por unidad</h2><span class="muted">${monthLabel(month)}</span></div>
+        <div class="table-wrap"><table class="data">
+          <thead><tr><th>Unidad</th><th class="num">Días</th><th class="num">Cobrado</th><th class="num">Gastos</th><th class="num">Utilidad</th></tr></thead>
           <tbody>${d.per_vehicle.map(v => `<tr><td>${esc(v.name)}</td><td class="num">${Math.round(v.rented_days)}</td>
             <td class="num">${mxn(v.income_cents)}</td><td class="num">${mxn(v.expense_cents)}</td>
-            <td class="num"><strong>${mxn(v.income_cents - v.expense_cents)}</strong></td></tr>`).join('')}</tbody>
+            <td class="num"><strong class="${v.income_cents - v.expense_cents < 0 ? 'neg' : ''}">${mxn(v.income_cents - v.expense_cents)}</strong></td></tr>`).join('')}</tbody>
+          <tfoot><tr><td>Total</td><td class="num">${Math.round(d.per_vehicle.reduce((t, v) => t + v.rented_days, 0))}</td>
+            <td class="num">${mxn(d.per_vehicle.reduce((t, v) => t + Number(v.income_cents), 0))}</td>
+            <td class="num">${mxn(d.per_vehicle.reduce((t, v) => t + Number(v.expense_cents), 0))}</td>
+            <td class="num">${mxn(d.per_vehicle.reduce((t, v) => t + Number(v.income_cents) - Number(v.expense_cents), 0))}</td></tr></tfoot>
         </table></div>
-        <p class="muted"><small>Facturado (rentas que inician este mes): ${mxn(d.billed_cents)}. "Cobrado" es el dinero recibido en el mes.</small></p>
+        <p class="muted"><small>"Cobrado" es el dinero recibido en el mes. Los gastos generales (sin unidad) no aparecen en esta tabla.</small></p>
       </div>`;
   },
+  after(el) { mountCharts(el, this.charts); },
 };
 
 // ───────────────────────────── Rentas (lista) ─────────────────────────────
