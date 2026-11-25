@@ -50,8 +50,13 @@ textarea { min-height: 80px; resize: vertical; }
 .row.between { justify-content: space-between; }
 .check { display: flex; gap: 8px; align-items: center; font-weight: 500; color: var(--ink); }
 .check input { width: 20px; min-height: 20px; }
-fieldset { border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; margin: 0; display: grid; gap: 12px; background: var(--card); }
-legend { font-weight: 700; padding: 0 6px; }
+fieldset { border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; margin: 0; display: grid; gap: 12px; background: var(--card); min-width: 0; }
+/* El título va dentro del recuadro (no montado sobre el borde): float lo saca de la línea del borde. */
+legend {
+  float: left; width: 100%; padding: 0 0 10px; margin: 0; font-size: 16px; font-weight: 750; color: var(--ink);
+  border-bottom: 1px solid var(--line);
+}
+fieldset.checks legend { font-size: 14px; padding-bottom: 8px; }
 
 /* Botones */
 .btn {

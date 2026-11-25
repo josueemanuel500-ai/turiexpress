@@ -1,10 +1,10 @@
 // Panel de Turi Express. Sin dependencias ni compilación: módulos nativos del navegador.
 // La sesión vive en una cookie httpOnly (el JavaScript nunca ve el token).
 
-import { ic, hydrateIcons } from './icons.js?v=6';
-import { mountCharts, hideTip, SERIES, OTHER } from './charts.js?v=6';
+import { ic, hydrateIcons } from './icons.js?v=7';
+import { mountCharts, hideTip, SERIES, OTHER } from './charts.js?v=7';
 
-const APP_VERSION = '1.3.0'; // Versión del panel; debe coincidir con version.json al desplegar.
+const APP_VERSION = '1.3.1'; // Versión del panel; debe coincidir con version.json al desplegar.
 const TZ = 'America/Merida';
 const OFFSET_H = 6; // Mérida: UTC-6 todo el año
 const $ = (s, el = document) => el.querySelector(s);

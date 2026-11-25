@@ -1,7 +1,7 @@
 // Service worker del panel: notificaciones push y carga offline del cascarón.
 // Los datos (/v1/*) nunca se guardan en caché: son privados y deben estar al día.
-const CACHE = 'turi-panel-v6';
-const SHELL = ['/', '/index.html', '/app.css?v=6', '/app.js?v=6', '/icons.js?v=6', '/charts.js?v=6', '/manifest.webmanifest', '/icons/icon-192.png'];
+const CACHE = 'turi-panel-v7';
+const SHELL = ['/', '/index.html', '/app.css?v=7', '/app.js?v=7', '/icons.js?v=7', '/charts.js?v=7', '/manifest.webmanifest', '/icons/icon-192.png'];
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)).then(() => self.skipWaiting()));
