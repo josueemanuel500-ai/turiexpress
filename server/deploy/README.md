@@ -37,3 +37,25 @@ Con una base local (por ejemplo PGlite en el puerto 55432) y `PG_POOL_MAX=1`:
 npm ci && npm run build && node --env-file=.env dist/index.js
 npm test   # pruebas del cálculo de tarifas
 ```
+
+## Respaldo fuera del servidor (Google Drive) y monitoreo
+
+El respaldo nocturno (`deploy/backup.sh`, 02:30) se instala solo con `deploy.sh` y guarda 30 copias en `~/backups`.
+Para que además suba una copia fuera del servidor (base de datos + fotos), configura **rclone** una vez:
+
+1. En el servidor instala rclone: `sudo -v ; curl https://rclone.org/install.sh | sudo bash`
+2. En tu computadora (con navegador) instala rclone y ejecuta `rclone authorize "drive"`; copia el texto que imprime.
+3. En el servidor: `rclone config` → `n` (nuevo) → nombre **respaldo** → tipo **drive** → deja client id/secret vacíos →
+   scope `1` → en "Use web browser to automatically authenticate?" responde **n** y pega el texto del paso 2.
+4. Prueba: `bash ~/turiexpress/server/deploy/backup.sh && cat ~/backups/status.json` → `"offsite":"ok"`.
+
+**Monitoreo** (gratis en healthchecks.io): crea dos checks, "API" (periodo 5 min) y "Respaldo" (periodo 1 día), con aviso
+por correo o Telegram. Agrega a `server/.env`:
+
+```
+HEALTHCHECK_URL=https://hc-ping.com/<uuid-del-check-API>
+HEALTHCHECK_BACKUP_URL=https://hc-ping.com/<uuid-del-check-Respaldo>
+```
+
+y reinicia (`bash deploy/deploy.sh`). Si el servidor se apaga o pierde internet, te llega el aviso.
+En Ajustes → Sistema y respaldos se ve el estado de ambos.

@@ -1,4 +1,7 @@
 import { pool } from './db.js';
+import { env } from './env.js';
+import { logEvent } from './common.js';
+import { purgeMedia, VEHICLE_COLUMNS, vehicleAlerts } from './operations.js';
 import { notifyStaff } from './push.js';
 
 const TZ = 'America/Merida';
@@ -28,7 +31,7 @@ async function dailySummary(today: string, log: (m: string) => void) {
           AND (starts_at AT TIME ZONE '${TZ}')::date = $1::date) AS pickups,
        (SELECT count(*)::int FROM reservation WHERE status IN ('in_service','confirmed','assigned')
           AND (ends_at AT TIME ZONE '${TZ}')::date = $1::date) AS returns,
-       (SELECT count(*)::int FROM reservation WHERE status IN ('new','quoted')) AS pending`, [today]);
+       (SELECT count(*)::int FROM reservation WHERE status IN ('new','quoted','hold')) AS pending`, [today]);
   const { pickups, returns, pending } = rows[0];
   if (!pickups && !returns && !pending) return;
   const parts = [
@@ -73,12 +76,54 @@ async function perReservation(today: string, log: (m: string) => void) {
 async function purgeExpiredPersonalData(log: (m: string) => void) {
   const anon = await pool.query(
     `UPDATE reservation SET client_name='(dato eliminado)', client_phone='0', client_email=NULL, notes=NULL,
-        pickup='—', destination=NULL, client_id=NULL
-      WHERE ends_at < now() - interval '12 months' AND client_name <> '(dato eliminado)'`);
+        pickup='—', destination=NULL, client_id=NULL, checklist_out=NULL, checklist_in=NULL
+      WHERE ends_at < now() - interval '12 months' AND client_name <> '(dato eliminado)' RETURNING id`);
+  await purgeMedia(anon.rows.map(r => r.id));
   const del = await pool.query(
     `DELETE FROM client c WHERE c.updated_at < now() - interval '12 months'
         AND NOT EXISTS (SELECT 1 FROM reservation r WHERE r.client_id = c.id)`);
   if (anon.rowCount || del.rowCount) log(`privacidad: ${anon.rowCount} rentas anonimizadas, ${del.rowCount} clientes eliminados`);
+}
+
+/** Apartados de la web: aviso 1 h antes de vencer y liberación automática al vencer. */
+async function expireHolds(today: string, log: (m: string) => void) {
+  const soon = await pool.query(
+    `SELECT id, folio, client_name FROM reservation
+      WHERE status='hold' AND hold_until BETWEEN now() AND now() + interval '1 hour'`);
+  for (const r of soon.rows) {
+    const claim = await pool.query(
+      'INSERT INTO reminder_log (reservation_id, kind, sent_on) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING', [r.id, 'hold_expiring', today]);
+    if (!claim.rowCount) continue;
+    await notifyStaff({ title: `Apartado por vencer ${r.folio}`, body: `${r.client_name}: confírmalo o se libera en menos de 1 hora`, url: `/#/reservas/${r.id}`, tag: `hold-${r.id}`, urgent: true }, log);
+  }
+  const expired = await pool.query(
+    `UPDATE reservation SET status='cancelled', hold_until=NULL, updated_at=now()
+      WHERE status='hold' AND hold_until < now() RETURNING id, folio, client_name`);
+  for (const r of expired.rows) {
+    await logEvent(pool, r.id, null, 'hold_expired', {});
+    await notifyStaff({ title: `Apartado vencido ${r.folio}`, body: `Se liberaron las fechas de ${r.client_name}`, url: `/#/reservas/${r.id}`, tag: `hold-${r.id}` }, log);
+  }
+}
+
+/** Una vez al día: documentos por vencer y servicios pendientes de las unidades. */
+async function maintenanceAlerts(today: string, log: (m: string) => void) {
+  const claim = await pool.query(
+    `INSERT INTO setting (key, value) VALUES ('last_maintenance_alert', to_jsonb($1::text))
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()
+       WHERE setting.value IS DISTINCT FROM EXCLUDED.value
+     RETURNING key`, [today]);
+  if (!claim.rowCount) return;
+  const { rows } = await pool.query(`SELECT ${VEHICLE_COLUMNS} FROM vehicle WHERE active ORDER BY code`);
+  const lines = rows.flatMap(v => vehicleAlerts(v).filter(a => a.text !== 'Registra el último servicio').map(a => `${v.name}: ${a.text}`));
+  if (!lines.length) return;
+  await notifyStaff({ title: 'Mantenimiento de unidades', body: lines.slice(0, 4).join(' · ') + (lines.length > 4 ? ` · y ${lines.length - 4} más` : ''), url: '/#/ajustes', tag: `maint-${today}` }, log);
+}
+
+/** Señal de vida para el monitoreo externo: si deja de llegar, el servicio te avisa. */
+async function heartbeat() {
+  if (!env.HEALTHCHECK_URL) return;
+  await pool.query('SELECT 1');
+  await fetch(env.HEALTHCHECK_URL, { signal: AbortSignal.timeout(10_000) }).catch(() => {});
 }
 
 export function startReminders(log: (m: string) => void) {
@@ -87,6 +132,9 @@ export function startReminders(log: (m: string) => void) {
       const { date, hour } = localNow();
       if (hour >= DAILY_HOUR) await dailySummary(date, log);
       await perReservation(date, log);
+      await expireHolds(date, log);
+      if (hour >= DAILY_HOUR) await maintenanceAlerts(date, log);
+      await heartbeat();
       if (hour === 3) await purgeExpiredPersonalData(log);
     } catch (error) {
       log(`recordatorios: ${(error as Error).message}`);

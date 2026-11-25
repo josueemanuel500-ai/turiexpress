@@ -1,10 +1,10 @@
 // Panel de Turi Express. Sin dependencias ni compilación: módulos nativos del navegador.
 // La sesión vive en una cookie httpOnly (el JavaScript nunca ve el token).
 
-import { ic, hydrateIcons } from './icons.js?v=5';
-import { mountCharts, hideTip, SERIES, OTHER } from './charts.js?v=5';
+import { ic, hydrateIcons } from './icons.js?v=6';
+import { mountCharts, hideTip, SERIES, OTHER } from './charts.js?v=6';
 
-const APP_VERSION = '1.2.0'; // Versión del panel; debe coincidir con version.json al desplegar.
+const APP_VERSION = '1.3.0'; // Versión del panel; debe coincidir con version.json al desplegar.
 const TZ = 'America/Merida';
 const OFFSET_H = 6; // Mérida: UTC-6 todo el año
 const $ = (s, el = document) => el.querySelector(s);
@@ -24,15 +24,15 @@ const PAY_KIND = { deposit: 'Anticipo', payment: 'Pago', refund: 'Reembolso' };
 const PAY_METHOD = { cash: 'Efectivo', transfer: 'Transferencia', card: 'Tarjeta', other: 'Otro' };
 const FUEL = ['Vacío', '1/4', '1/2', '3/4', 'Lleno'];
 const FILTERS = {
-  solicitudes: { label: 'Solicitudes', status: 'new,quoted' },
-  activas: { label: 'Por entregar', status: 'confirmed,assigned,hold,deposit_pending' },
+  solicitudes: { label: 'Solicitudes', status: 'new,quoted,hold' },
+  activas: { label: 'Por entregar', status: 'confirmed,assigned,deposit_pending' },
   enrenta: { label: 'En renta', status: 'in_service' },
   terminadas: { label: 'Terminadas', status: 'completed' },
   canceladas: { label: 'Canceladas', status: 'cancelled,no_show' },
   todas: { label: 'Todas', status: '' },
 };
 
-const state = { me: null, vehicles: [], pricing: {}, business: {}, push: {} };
+const state = { me: null, vehicles: [], pricing: {}, business: {}, push: {}, seasons: [], extras: {} };
 
 // ───────────────────────────── utilidades ─────────────────────────────
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -124,7 +124,7 @@ start();
 async function start() {
   try {
     const boot = await api('/ops/bootstrap');
-    Object.assign(state, { me: boot.user, vehicles: boot.vehicles, pricing: boot.pricing, business: boot.business, push: boot.push });
+    Object.assign(state, { me: boot.user, vehicles: boot.vehicles, pricing: boot.pricing, business: boot.business, push: boot.push, seasons: boot.seasons ?? [], extras: boot.extras ?? {} });
   } catch (error) {
     if (!error.expired) { $('#boot').innerHTML = `<p class="empty">No se pudo conectar con el servidor.<br><button class="btn" data-action="reload">Reintentar</button></p>`; }
     return;
@@ -181,7 +181,7 @@ window.addEventListener('hashchange', route);
 
 async function refreshBadge() {
   try {
-    const { data } = await api('/ops/reservations?status=new,quoted&limit=99');
+    const { data } = await api('/ops/reservations?status=new,quoted,hold&limit=99');
     const b = $('#pending-badge');
     b.textContent = data.length; b.hidden = !data.length;
     if ('setAppBadge' in navigator) data.length ? navigator.setAppBadge(data.length) : navigator.clearAppBadge();
@@ -205,6 +205,7 @@ views.inicio = {
             <a class="btn wa sm" href="${wa(v.current_phone, `Hola ${v.current_client}, te escribimos de ${state.business.name || 'Turi Express'}.`)}" target="_blank" rel="noopener">WhatsApp</a>`
           : `<p class="muted">Libre ahora.</p>`}
         ${v.next_id ? `<p><small class="muted">Siguiente: <a href="#/reservas/${v.next_id}">${esc(v.next_client)}</a> · ${fmtDT(v.next_starts)}</small></p>` : ''}
+        ${v.alerts?.filter(a => a.text !== 'Registra el último servicio').length ? `<div class="chips-wrap">${alertChips(v.alerts.filter(a => a.text !== 'Registra el último servicio'))}</div>` : ''}
       </div>`;
     }).join('');
     const agenda = d.agenda.length ? d.agenda.map(a => `
@@ -352,17 +353,39 @@ function reservationItem(r) {
   return `<a class="item" href="#/reservas/${r.id}">
     <div><strong>${esc(r.client_name)}</strong> <small class="muted">${esc(r.folio)}</small>
       <div class="meta">${fmtDT(r.starts_at)} → ${fmtDT(r.ends_at)}</div>
-      <div class="meta">${esc(r.vehicle_name ?? 'Sin unidad')} · ${daysBetween(r.starts_at, r.ends_at)} días${r.source === 'website' ? ' · web' : ''}</div></div>
+      <div class="meta">${esc(r.vehicle_name ?? 'Sin unidad')} · ${daysBetween(r.starts_at, r.ends_at)} días${r.source === 'website' ? ' · web' : ''}</div>
+      ${r.status === 'hold' && r.hold_until ? `<div class="meta hold-note">${ic('clock')}Apartada hasta ${fmtDT(r.hold_until)}</div>` : ''}</div>
     <div class="right">${pill(r.status)}<div class="amount">${mxn(r.quote_cents)}</div>
-      ${r.balance_cents > 0 && !['cancelled', 'no_show', 'new', 'quoted'].includes(r.status) ? `<small class="amount due">Debe ${mxn(r.balance_cents)}</small>` : ''}</div>
+      ${r.balance_cents > 0 && !['cancelled', 'no_show', 'new', 'quoted', 'hold'].includes(r.status) ? `<small class="amount due">Debe ${mxn(r.balance_cents)}</small>` : ''}</div>
   </a>`;
 }
 
 // ───────────────────────────── Detalle de renta ─────────────────────────────
+const CHECK_ITEMS = { spare: 'Llanta de refacción', jack: 'Gato y llave', papers: 'Tarjeta de circulación y póliza', safety: 'Triángulos y extintor', clean: 'Unidad limpia' };
+const PHOTO_SLOTS = { front: 'Frente', back: 'Atrás', left: 'Lado izquierdo', right: 'Lado derecho', interior: 'Interior', dash: 'Tablero (km y gasolina)' };
+const CHARGE_KIND = { late: 'Devolución tardía', fuel: 'Combustible faltante', delivery: 'Entrega/recolección', driver: 'Chofer', cleaning: 'Limpieza', damage: 'Daños', other: 'Otro' };
+const PRICE_MODE = { auto: 'Tarifas y temporadas', rates: 'Tarifa personalizada', manual: 'Total acordado' };
+
+function inspectionBlock(r, photos, stage) {
+  const done = stage === 'out' ? r.delivered_at : r.returned_at;
+  const checklist = stage === 'out' ? r.checklist_out : r.checklist_in;
+  const mine = Object.fromEntries(photos.filter(p => p.stage === stage).map(p => [p.slot, p]));
+  const count = Object.keys(mine).length;
+  return `<div class="inspection">
+    <div class="row between"><h3>${stage === 'out' ? 'Salida' : 'Regreso'}</h3><small class="muted">${count} de ${Object.keys(PHOTO_SLOTS).length} fotos${done ? ` · ${fmtDT(done)}` : ''}</small></div>
+    <div class="photo-grid">${Object.entries(PHOTO_SLOTS).map(([slot, label]) => mine[slot]
+      ? `<figure class="photo"><button type="button" class="photo-open" data-action="photo-view" data-id="${mine[slot].id}" data-label="${esc(label)}"><img src="/v1/ops/photos/${mine[slot].id}" alt="${esc(label)}" loading="lazy"></button>
+          <figcaption>${esc(label)}<label class="photo-redo" title="Tomar de nuevo">${ic('camera')}<input type="file" accept="image/*" capture="environment" data-photo="${stage}:${slot}" hidden></label></figcaption></figure>`
+      : `<label class="photo empty">${ic('camera')}<span>${esc(label)}</span><input type="file" accept="image/*" capture="environment" data-photo="${stage}:${slot}" hidden></label>`).join('')}</div>
+    ${checklist ? `<ul class="check-list">${Object.entries(CHECK_ITEMS).map(([k, label]) => `<li class="${checklist.items?.[k] ? 'ok' : 'miss'}">${ic(checklist.items?.[k] ? 'check' : 'x')}${esc(label)}</li>`).join('')}</ul>
+      ${checklist.damages ? `<p class="damages"><strong>Daños / observaciones:</strong> ${esc(checklist.damages)}</p>` : ''}` : ''}
+  </div>`;
+}
+
 views.detalle = {
   async render(id) {
-    const { reservation: r, payments, events, client } = await api(`/ops/reservations/${id}`);
-    this.data = { r, payments, client };
+    const { reservation: r, payments, events, client, charges = [], photos = [] } = await api(`/ops/reservations/${id}`);
+    this.data = { r, payments, client, charges };
     const days = daysBetween(r.starts_at, r.ends_at);
     const b = state.business.name || 'Turi Express';
     const msgs = {
@@ -372,14 +395,18 @@ views.detalle = {
       balance: `Hola ${r.client_name}, de tu renta ${r.folio} queda un saldo de ${mxn(r.balance_cents)}. ¿Nos confirmas cómo prefieres pagarlo?`,
     };
     const actions = statusActions(r);
+    const showInspection = ['confirmed', 'assigned', 'deposit_pending', 'in_service', 'completed'].includes(r.status) || photos.length;
     return `
       <a class="back" href="#/reservas">${ic('left')}Rentas</a>
       <div class="view-head"><div><h1>${esc(r.client_name)}</h1><span class="muted">${esc(r.folio)} · ${r.source === 'website' ? 'Solicitud web' : 'Capturada por personal'}</span></div>${pill(r.status)}</div>
       ${client?.blocked ? `<p class="form-error with-ic">${ic('alert')}Este cliente está marcado como bloqueado. Revisa sus notas antes de rentar.</p>` : ''}
+      ${r.status === 'hold' && r.hold_until ? `<div class="banner info"><span class="with-ic">${ic('clock')}Unidad apartada hasta ${fmtDT(r.hold_until)}. Si no la confirmas, se libera sola.</span></div>` : ''}
       <div class="actions">${actions}
         <a class="btn" href="#/editar/${r.id}">${ic('edit')}Editar</a>
         <button class="btn" data-action="contract" data-id="${r.id}" data-folio="${esc(r.folio)}">${ic('file')}Contrato PDF</button>
+        ${['cancelled', 'no_show'].includes(r.status) ? '' : `<button class="btn ${r.signed_at ? '' : 'accent'}" data-action="sign">${ic('pen')}${r.signed_at ? 'Firmado' : 'Firmar contrato'}</button>`}
       </div>
+      ${r.signed_at ? `<p class="muted signed-note">${ic('check', 'ok')} Contrato firmado por <strong>${esc(r.signed_name)}</strong> el ${fmtDT(r.signed_at)}</p>` : ''}
       <div class="section card">
         <dl class="dl">
           <div><dt>Unidad</dt><dd>${esc(r.vehicle_name ?? 'Sin asignar')}</dd></div>
@@ -394,6 +421,11 @@ views.detalle = {
         </dl>
         ${r.notes ? `<p><small class="muted">Notas</small><br>${esc(r.notes)}</p>` : ''}
       </div>
+      ${showInspection ? `<div class="section card">
+        <h2 class="with-ic">${ic('camera')}Revisión de la unidad</h2>
+        <p class="muted"><small>Toma las fotos al entregar y al recibir: si hay un golpe o falta gasolina, aquí está la prueba.</small></p>
+        <div class="inspections">${inspectionBlock(r, photos, 'out')}${['in_service', 'completed'].includes(r.status) || photos.some(p => p.stage === 'in') ? inspectionBlock(r, photos, 'in') : ''}</div>
+      </div>` : ''}
       <div class="section card">
         <h2>WhatsApp al cliente</h2>
         <div class="actions">
@@ -405,11 +437,15 @@ views.detalle = {
         </div>
       </div>
       <div class="section card">
-        <div class="row between"><h2>Cobro</h2><button class="btn sm primary" data-action="add-payment">${ic('plus')}Registrar pago</button></div>
+        <div class="row between"><h2>Cobro</h2>
+          <div class="row"><button class="btn sm" data-action="add-charge">${ic('plus')}Cargo</button><button class="btn sm primary" data-action="add-payment">${ic('plus')}Pago</button></div></div>
         <div class="money-box">
-          <div class="line"><span>Tarifa</span><span>${mxn(r.daily_rate_cents)}/día · ${mxn(r.weekly_rate_cents)}/semana</span></div>
+          <div class="line"><span>Tarifa <small class="muted">· ${PRICE_MODE[r.price_mode] ?? ''}</small></span><span>${mxn(r.daily_rate_cents)}/día · ${mxn(r.weekly_rate_cents)}/semana</span></div>
           ${r.discount_cents ? `<div class="line"><span>Descuento</span><span>−${mxn(r.discount_cents)}</span></div>` : ''}
           <div class="line total"><span>Total de la renta</span><span>${mxn(r.quote_cents)}</span></div>
+          ${charges.map(c => `<div class="line"><span>${esc(CHARGE_KIND[c.kind] ?? c.kind)}${c.description ? ` <small class="muted">· ${esc(c.description)}</small>` : ''}</span>
+            <span>+${mxn(c.amount_cents)}<button class="btn ghost sm icon" data-action="del-charge" data-id="${c.id}" aria-label="Quitar cargo">${ic('trash')}</button></span></div>`).join('')}
+          ${charges.length ? `<div class="line total"><span>Total a pagar</span><span>${mxn(Number(r.quote_cents) + Number(r.charges_cents))}</span></div>` : ''}
           <div class="line"><span>Pagado</span><span>${mxn(r.paid_cents)}</span></div>
           <div class="line total"><span>Saldo</span><span class="${r.balance_cents > 0 ? 'amount due' : ''}">${mxn(r.balance_cents)}</span></div>
           <div class="line"><span>Depósito en garantía</span><span>${mxn(r.guarantee_cents)} ${r.guarantee_cents ? (r.guarantee_returned ? '<span class="pill ok">Devuelto</span>' : '<span class="pill">Retenido</span>') : ''}</span></div>
@@ -426,16 +462,53 @@ views.detalle = {
         ${state.me.role === 'admin' ? `<button class="btn danger block" style="margin-top:14px" data-action="delete-reservation" data-id="${r.id}">${ic('trash')}Eliminar renta definitivamente</button>` : ''}
       </div>`;
   },
-  after() {},
+  after(el) {
+    $$('input[data-photo]', el).forEach(input => input.addEventListener('change', async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      const [stage, slot] = input.dataset.photo.split(':');
+      const box = input.closest('.photo');
+      box?.classList.add('uploading');
+      try {
+        const data = await compressImage(file);
+        await api(`/ops/reservations/${views.detalle.data.r.id}/photos`, { method: 'POST', body: { stage, slot, data } });
+        toast('Foto guardada'); route();
+      } catch (error) {
+        box?.classList.remove('uploading');
+        if (!error.expired) toast(error.message || 'No se pudo subir la foto', true);
+      }
+    }));
+  },
 };
 
+/** Reduce la foto a 1600 px y JPEG ~80 % para que suba rápido con datos móviles. */
+async function compressImage(file, max = 1600, quality = 0.8) {
+  const bitmap = await createImageBitmap(file).catch(() => null);
+  const src = bitmap ?? await new Promise((resolve, reject) => {
+    const img = new Image(); img.onload = () => resolve(img); img.onerror = () => reject(new Error('No se pudo leer la foto'));
+    img.src = URL.createObjectURL(file);
+  });
+  const scale = Math.min(1, max / Math.max(src.width, src.height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(src.width * scale); canvas.height = Math.round(src.height * scale);
+  canvas.getContext('2d').drawImage(src, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL('image/jpeg', quality);
+}
+
 function eventLabel(e) {
-  if (e.event.startsWith('status:')) return `Estado: ${STATUS[e.event.slice(7)] ?? e.event.slice(7)}${e.detail?.km ? ` (${e.detail.km} km)` : ''}`;
+  if (e.event.startsWith('status:')) return `Estado: ${STATUS[e.event.slice(7)] ?? e.event.slice(7)}${e.detail?.km ? ` (${e.detail.km} km)` : ''}${e.detail?.hold_hours ? ` (${e.detail.hold_hours} h)` : ''}`;
   if (e.event.startsWith('payment:')) {
     const k = e.event.slice(8);
     return k === 'deleted' ? 'Pago eliminado' : `${PAY_KIND[k] ?? k} ${mxn(e.detail?.amount_cents)}`;
   }
-  return { created: 'Renta creada', created_public: 'Solicitud recibida desde la web', updated: 'Datos actualizados' }[e.event] ?? e.event;
+  if (e.event.startsWith('charge:')) {
+    const k = e.event.slice(7);
+    return k === 'deleted' ? `Cargo eliminado (${CHARGE_KIND[e.detail?.kind] ?? ''})` : `Cargo: ${CHARGE_KIND[k] ?? k} ${mxn(e.detail?.amount_cents)}`;
+  }
+  return {
+    created: 'Renta creada', created_public: 'Solicitud recibida desde la web (unidad apartada)', updated: 'Datos actualizados',
+    hold_expired: 'Apartado vencido: fechas liberadas', signed: 'Contrato firmado', 'signature:deleted': 'Firma borrada',
+  }[e.event] ?? e.event;
 }
 
 function statusActions(r) {
@@ -443,7 +516,9 @@ function statusActions(r) {
   switch (r.status) {
     case 'new': case 'quoted':
       return btn('confirmed', `${ic('check')}Confirmar`, 'primary') + btn('cancelled', `${ic('x')}Rechazar`, 'danger');
-    case 'confirmed': case 'assigned': case 'hold': case 'deposit_pending':
+    case 'hold':
+      return btn('confirmed', `${ic('check')}Confirmar`, 'primary') + `<button class="btn" data-action="extend-hold">${ic('clock')}Extender apartado</button>` + btn('cancelled', `${ic('x')}Rechazar`, 'danger');
+    case 'confirmed': case 'assigned': case 'deposit_pending':
       return btn('in_service', `${ic('van')}Entregar unidad`, 'primary') + btn('no_show', 'No se presentó') + btn('cancelled', `${ic('x')}Cancelar`, 'danger');
     case 'in_service':
       return btn('completed', `${ic('undo')}Recibir unidad`, 'primary');
@@ -452,6 +527,22 @@ function statusActions(r) {
     default:
       return btn('new', 'Reactivar');
   }
+}
+
+/** Cargos sugeridos al recibir: horas de retraso y gasolina faltante, según Ajustes → Cargos. */
+function suggestedCharges(r, fuelIn) {
+  const x = state.extras ?? {};
+  const out = [];
+  const lateH = (Date.now() - new Date(r.ends_at)) / 3600e3 - (x.late_grace_minutes ?? 60) / 60;
+  if (lateH > 0 && x.late_hour_cents) {
+    const h = Math.ceil(lateH);
+    const daily = r.daily_rate_cents || Infinity;
+    const amount = Math.floor(h / 24) * r.daily_rate_cents + Math.min((h % 24) * x.late_hour_cents, daily);
+    out.push({ kind: 'late', description: `${h} h de retraso`, amount_cents: amount });
+  }
+  const diff = FUEL.indexOf(r.fuel_out ?? 'Lleno') - FUEL.indexOf(fuelIn);
+  if (diff > 0 && x.fuel_quarter_cents) out.push({ kind: 'fuel', description: `${diff}/4 de tanque`, amount_cents: diff * x.fuel_quarter_cents });
+  return out;
 }
 
 async function changeStatus(status) {
@@ -478,20 +569,117 @@ async function changeStatus(status) {
   if (status === 'in_service' || status === 'completed') {
     const vehicle = state.vehicles.find(v => v.id === r.vehicle_id);
     const out = status === 'in_service';
+    const prev = out ? null : r.checklist_out;
     return openModal(`<h2>${out ? 'Entregar unidad' : 'Recibir unidad'}</h2><form id="mform" class="stack">
       <div class="grid2">
         <label>Kilometraje<input name="km" type="number" inputmode="numeric" min="0" value="${out ? (vehicle?.odometer_km ?? '') : (r.km_out ?? '')}"></label>
         <label>Combustible<select name="fuel">${FUEL.map(f => `<option ${f === (out ? 'Lleno' : r.fuel_out) ? 'selected' : ''}>${f}</option>`).join('')}</select></label>
       </div>
-      ${out ? `<p class="muted"><small>Verifica INE y licencia vigente. Saldo pendiente: <strong>${mxn(r.balance_cents)}</strong>.</small></p>`
-        : `${r.guarantee_cents ? `<label class="check"><input type="checkbox" name="guarantee_returned"> Devolví el depósito en garantía (${mxn(r.guarantee_cents)})</label>` : ''}
-           ${r.balance_cents > 0 ? `<p class="form-error" style="display:block">El cliente aún debe ${mxn(r.balance_cents)}.</p>` : ''}`}
+      <fieldset class="checks"><legend>Revisión</legend>
+        ${Object.entries(CHECK_ITEMS).map(([k, label]) => `<label class="check"><input type="checkbox" name="ck_${k}" ${out || prev?.items?.[k] ? 'checked' : ''}> ${esc(label)}</label>`).join('')}
+        <label>Daños u observaciones<textarea name="damages" maxlength="1000" placeholder="${out ? 'Ej. rayón en defensa trasera' : 'Compara con las fotos de salida'}"></textarea></label>
+      </fieldset>
+      ${out ? `<p class="muted"><small>Verifica INE y licencia vigente. Toma las fotos de salida en la sección "Revisión de la unidad". Saldo pendiente: <strong>${mxn(r.balance_cents)}</strong>.</small></p>`
+        : `<fieldset class="checks" id="charges-box"><legend>Cargos extra</legend><div id="charge-list" class="stack"></div>
+             <label class="check"><input type="checkbox" name="cleaning"> Limpieza (${mxn(state.extras?.cleaning_cents)})</label></fieldset>
+           ${r.guarantee_cents ? `<label class="check"><input type="checkbox" name="guarantee_returned"> Devolví el depósito en garantía (${mxn(r.guarantee_cents)})</label>` : ''}
+           <p class="muted" id="balance-note"></p>`}
       <p class="form-error" hidden></p>
       <div class="row"><button class="btn primary" type="submit">${out ? 'Entregar' : 'Recibir'}</button><button class="btn" type="button" data-action="close-modal">Cancelar</button></div></form>`,
-    card => onSubmit($('#mform', card), d => send({ km: d.km ? Number(d.km) : undefined, fuel: d.fuel, guarantee_returned: d.guarantee_returned ? true : undefined })));
+    card => {
+      const form = $('#mform', card);
+      const renderCharges = () => {
+        if (out) return;
+        const list = suggestedCharges(r, form.elements.fuel.value);
+        $('#charge-list', card).innerHTML = list.length
+          ? list.map((c, i) => `<div class="charge-row"><label class="check"><input type="checkbox" name="sc_${i}" checked> ${esc(CHARGE_KIND[c.kind])} <small class="muted">${esc(c.description)}</small></label>
+              <input name="sa_${i}" type="number" min="0" step="0.01" inputmode="decimal" value="${pesos(c.amount_cents)}" aria-label="Monto">
+              <input type="hidden" name="sk_${i}" value="${c.kind}"><input type="hidden" name="sd_${i}" value="${esc(c.description)}"></div>`).join('')
+          : '<p class="muted" style="margin:0"><small>Sin retraso ni gasolina faltante.</small></p>';
+        $('#balance-note', card).textContent = r.balance_cents > 0 ? `Saldo antes de cargos: ${mxn(r.balance_cents)}.` : '';
+      };
+      form.elements.fuel?.addEventListener('change', renderCharges);
+      renderCharges();
+      onSubmit(form, d => {
+        const checklist = { items: Object.fromEntries(Object.keys(CHECK_ITEMS).map(k => [k, Boolean(d[`ck_${k}`])])), damages: d.damages || undefined };
+        const charges = [];
+        for (let i = 0; d[`sk_${i}`]; i++) if (d[`sc_${i}`] && toCents(d[`sa_${i}`]) > 0) charges.push({ kind: d[`sk_${i}`], description: d[`sd_${i}`], amount_cents: toCents(d[`sa_${i}`]) });
+        if (d.cleaning && state.extras?.cleaning_cents) charges.push({ kind: 'cleaning', description: null, amount_cents: state.extras.cleaning_cents });
+        return send({ km: d.km ? Number(d.km) : undefined, fuel: d.fuel, guarantee_returned: d.guarantee_returned ? true : undefined, checklist, charges: out ? undefined : charges });
+      });
+    });
   }
   if (['cancelled', 'no_show'].includes(status) && !confirm(`¿Marcar la renta como "${STATUS[status]}"? Las fechas se liberan.`)) return;
   await send({});
+}
+
+function chargeModal() {
+  const { r } = views.detalle.data;
+  const x = state.extras ?? {};
+  const days = daysBetween(r.starts_at, r.ends_at);
+  const defaults = { delivery: x.delivery_cents, driver: (x.driver_day_cents ?? 0) * days, cleaning: x.cleaning_cents, damage: '', other: '', late: '', fuel: '' };
+  openModal(`<h2>Agregar cargo</h2><form id="mform" class="stack">
+    <div class="grid2">
+      <label>Concepto<select name="kind">${['delivery', 'driver', 'damage', 'cleaning', 'late', 'fuel', 'other'].map(k => `<option value="${k}">${CHARGE_KIND[k]}</option>`).join('')}</select></label>
+      <label>Monto (MXN)<input name="amount" type="number" min="1" step="0.01" inputmode="decimal" required value="${defaults.delivery ? pesos(defaults.delivery) : ''}"></label>
+    </div>
+    <label>Detalle<input name="description" maxlength="300" placeholder="Opcional: dirección, días de chofer, descripción del daño…"></label>
+    <p class="muted"><small>Se suma al saldo y aparece en el contrato.</small></p>
+    <p class="form-error" hidden></p>
+    <div class="row"><button class="btn primary" type="submit">Agregar</button><button class="btn" type="button" data-action="close-modal">Cancelar</button></div></form>`,
+  card => {
+    const form = $('#mform', card);
+    form.elements.kind.addEventListener('change', () => {
+      const v = defaults[form.elements.kind.value];
+      form.elements.amount.value = v ? pesos(v) : '';
+      if (form.elements.kind.value === 'driver') form.elements.description.value = `${days} día${days === 1 ? '' : 's'}`;
+    });
+    onSubmit(form, async d => {
+      await api(`/ops/reservations/${r.id}/charges`, { method: 'POST', body: { kind: d.kind, description: d.description, amount_cents: toCents(d.amount) } });
+      closeModal(); toast('Cargo agregado'); route();
+    });
+  });
+}
+
+/** Firma con el dedo: el cliente firma en la pantalla y la firma aparece en el contrato PDF. */
+function signatureModal() {
+  const { r } = views.detalle.data;
+  openModal(`<h2>Firma del arrendatario</h2>
+    <p class="muted" style="margin:0"><small>Que el cliente lea el contrato y firme dentro del recuadro.</small></p>
+    <form id="mform" class="stack">
+      <label>Nombre de quien firma<input name="name" required minlength="3" value="${esc(r.signed_name ?? r.client_name)}"></label>
+      <div class="sign-pad"><canvas id="sign-canvas"></canvas><span class="sign-hint">Firma aquí</span></div>
+      <div class="row between"><button type="button" class="btn sm" id="sign-clear">${ic('undo')}Borrar</button>
+        ${r.signed_at ? `<button type="button" class="btn sm danger" data-action="sign-delete">${ic('trash')}Quitar firma</button>` : ''}</div>
+      <p class="form-error" hidden></p>
+      <div class="row"><button class="btn primary" type="submit">Guardar firma</button><button class="btn" type="button" data-action="close-modal">Cancelar</button></div>
+    </form>`, card => {
+    const canvas = $('#sign-canvas', card);
+    const ctx = canvas.getContext('2d');
+    const ratio = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * ratio; canvas.height = rect.height * ratio;
+    ctx.scale(ratio, ratio);
+    ctx.lineWidth = 2.4; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#102426';
+    let drawing = false, strokes = 0, last = null;
+    const pos = e => { const b = canvas.getBoundingClientRect(); return [e.clientX - b.left, e.clientY - b.top]; };
+    canvas.addEventListener('pointerdown', e => { drawing = true; last = pos(e); canvas.setPointerCapture(e.pointerId); card.querySelector('.sign-hint').hidden = true; });
+    canvas.addEventListener('pointermove', e => {
+      if (!drawing) return;
+      const p = pos(e);
+      ctx.beginPath(); ctx.moveTo(...last); ctx.lineTo(...p); ctx.stroke();
+      last = p; strokes++;
+    });
+    const stop = () => { drawing = false; };
+    canvas.addEventListener('pointerup', stop); canvas.addEventListener('pointercancel', stop);
+    $('#sign-clear', card).addEventListener('click', () => { ctx.clearRect(0, 0, canvas.width, canvas.height); strokes = 0; card.querySelector('.sign-hint').hidden = false; });
+    onSubmit($('#mform', card), async d => {
+      if (strokes < 5) throw new Error('Falta la firma');
+      // Fondo transparente → PNG pequeño que se pega sobre la línea de firma del contrato.
+      await api(`/ops/reservations/${r.id}/signature`, { method: 'POST', body: { name: d.name, data: canvas.toDataURL('image/png') } });
+      closeModal(); toast('Contrato firmado'); route();
+    });
+  });
 }
 
 function paymentModal() {
@@ -558,7 +746,7 @@ function reservationForm(existing, params = {}) {
   const ends = r ? toLocalInput(r.ends_at) : `${endD.toISOString().slice(0, 10)}T09:00`;
   const vehicleId = r?.vehicle_id ?? params.vehicle ?? '';
   // Es "manual" si el total guardado no coincide con lo que darían las tarifas.
-  const manual = Boolean(r) && r.quote_cents !== localQuote(r.starts_at, r.ends_at, r.daily_rate_cents, r.weekly_rate_cents, r.discount_cents);
+  const mode = r?.price_mode ?? 'auto';
   return `
     <a class="back" href="${r ? `#/reservas/${r.id}` : '#/reservas'}">${ic('left')}${r ? 'Volver' : 'Rentas'}</a>
     <h1>${r ? `Editar ${esc(r.folio)}` : 'Nueva renta'}</h1>
@@ -596,16 +784,16 @@ function reservationForm(existing, params = {}) {
         <label>Notas<textarea name="notes" maxlength="2000" placeholder="Destino, número de pasajeros, acuerdos…">${esc(r?.notes ?? '')}</textarea></label>
       </fieldset>
       <fieldset><legend>Precio</legend>
+        <label>Cómo se calcula<select name="price_mode">${Object.entries(PRICE_MODE).map(([k, v]) => `<option value="${k}" ${k === mode ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
         <div class="grid3">
-          <label>Tarifa diaria<input name="daily" type="number" inputmode="decimal" min="0" step="0.01" value="${pesos(r?.daily_rate_cents ?? p.daily_cents)}"></label>
-          <label>Tarifa semanal<input name="weekly" type="number" inputmode="decimal" min="0" step="0.01" value="${pesos(r?.weekly_rate_cents ?? p.weekly_cents)}"></label>
+          <label>Tarifa diaria<input name="daily" type="number" inputmode="decimal" min="0" step="0.01" value="${pesos(r?.daily_rate_cents ?? p.daily_cents)}" ${mode === 'rates' ? '' : 'readonly'}></label>
+          <label>Tarifa semanal<input name="weekly" type="number" inputmode="decimal" min="0" step="0.01" value="${pesos(r?.weekly_rate_cents ?? p.weekly_cents)}" ${mode === 'rates' ? '' : 'readonly'}></label>
           <label>Descuento<input name="discount" type="number" inputmode="decimal" min="0" step="0.01" value="${pesos(r?.discount_cents ?? 0)}"></label>
         </div>
         <div class="grid2">
-          <label>Total de la renta<input name="total" type="number" inputmode="decimal" min="0" step="0.01" value="${manual ? pesos(r.quote_cents) : ''}" ${manual ? '' : 'readonly'}></label>
+          <label>Total de la renta<input name="total" type="number" inputmode="decimal" min="0" step="0.01" value="${mode === 'manual' ? pesos(r.quote_cents) : ''}" ${mode === 'manual' ? '' : 'readonly'}></label>
           <label>Depósito en garantía<input name="guarantee" type="number" inputmode="decimal" min="0" step="0.01" value="${pesos(r?.guarantee_cents ?? p.deposit_cents)}"></label>
         </div>
-        <label class="check"><input type="checkbox" name="manual" ${manual ? 'checked' : ''}> Precio acordado manualmente</label>
         <p id="quote-info" class="muted"></p>
       </fieldset>
       <p class="form-error" hidden></p>
@@ -621,16 +809,18 @@ function bindReservationForm(el, id) {
     clearTimeout(timer);
     timer = setTimeout(async () => {
       if (!f('starts_at').value || !f('ends_at').value) return;
+      const mode = f('price_mode').value;
       const qs = new URLSearchParams({
-        starts_at: fromLocalInput(f('starts_at').value), ends_at: fromLocalInput(f('ends_at').value),
-        daily_rate_cents: toCents(f('daily').value), weekly_rate_cents: toCents(f('weekly').value), discount_cents: toCents(f('discount').value),
+        starts_at: fromLocalInput(f('starts_at').value), ends_at: fromLocalInput(f('ends_at').value), discount_cents: toCents(f('discount').value),
       });
+      if (mode === 'rates') { qs.set('daily_rate_cents', toCents(f('daily').value)); qs.set('weekly_rate_cents', toCents(f('weekly').value)); }
       if (id) qs.set('exclude', id);
       try {
         const q = await api(`/ops/quote?${qs}`);
-        if (!f('manual').checked) f('total').value = pesos(q.total_cents);
+        if (mode !== 'manual') f('total').value = pesos(q.total_cents);
+        if (mode === 'auto') { f('daily').value = pesos(q.daily_cents); f('weekly').value = pesos(q.weekly_cents); }
         $('#quote-info', el).textContent = q.days > 0
-          ? `${q.days} día${q.days > 1 ? 's' : ''}${q.weeks ? ` (${q.weeks} semana${q.weeks > 1 ? 's' : ''} + ${q.rest_days} día${q.rest_days === 1 ? '' : 's'})` : ''} · Calculado: ${mxn(q.total_cents)}`
+          ? `${q.days} día${q.days > 1 ? 's' : ''}${q.weeks ? ` (${q.weeks} semana${q.weeks > 1 ? 's' : ''} + ${q.rest_days} día${q.rest_days === 1 ? '' : 's'})` : ''} · Calculado: ${mxn(q.total_cents)}${q.seasons?.length ? ` · Temporada: ${q.seasons.join(', ')}` : ''}`
           : 'La devolución debe ser después de la entrega.';
         [...f('vehicle_id').options].forEach(o => {
           if (!o.value) return;
@@ -642,7 +832,12 @@ function bindReservationForm(el, id) {
     }, 300);
   };
   ['starts_at', 'ends_at', 'daily', 'weekly', 'discount'].forEach(n => f(n).addEventListener('input', requote));
-  f('manual').addEventListener('change', () => { f('total').readOnly = !f('manual').checked; if (!f('manual').checked) requote(); });
+  f('price_mode').addEventListener('change', () => {
+    const mode = f('price_mode').value;
+    f('daily').readOnly = f('weekly').readOnly = mode !== 'rates';
+    f('total').readOnly = mode !== 'manual';
+    requote();
+  });
   requote();
 
   const search = $('#client-search', el);
@@ -674,8 +869,10 @@ function bindReservationForm(el, id) {
       vehicle_id: d.vehicle_id || null,
       starts_at: fromLocalInput(d.starts_at), ends_at: fromLocalInput(d.ends_at),
       status: d.status, pickup: d.pickup, notes: d.notes,
-      daily_rate_cents: toCents(d.daily), weekly_rate_cents: toCents(d.weekly), discount_cents: toCents(d.discount),
-      quote_cents: d.manual ? toCents(d.total) : null, guarantee_cents: toCents(d.guarantee),
+      price_mode: d.price_mode, discount_cents: toCents(d.discount), guarantee_cents: toCents(d.guarantee),
+      daily_rate_cents: d.price_mode === 'auto' ? undefined : toCents(d.daily),
+      weekly_rate_cents: d.price_mode === 'auto' ? undefined : toCents(d.weekly),
+      quote_cents: d.price_mode === 'manual' ? toCents(d.total) : null,
     };
     const res = id
       ? await api(`/ops/reservations/${id}`, { method: 'PUT', body })
@@ -831,11 +1028,40 @@ views.gastos = {
 };
 
 // ───────────────────────────── Ajustes ─────────────────────────────
+const alertChips = alerts => (alerts ?? []).map(a => `<span class="pill ${a.level === 'due' ? 'bad' : 'warn'} with-ic">${ic(a.level === 'due' ? 'alert' : 'wrench')}${esc(a.text)}</span>`).join('');
+const ago = iso => {
+  const h = (Date.now() - new Date(iso)) / 3600e3;
+  return h < 1 ? 'hace minutos' : h < 48 ? `hace ${Math.round(h)} h` : `hace ${Math.round(h / 24)} días`;
+};
+
+function systemCard(sys) {
+  if (!sys) return '';
+  const b = sys.backup;
+  const backupOk = b?.ok && b.at && (Date.now() - new Date(b.at)) < 36 * 3600e3;
+  const offsite = { ok: 'Sí, copia fuera del servidor', error: 'Falló la subida externa', no_configurado: 'No configurada' }[b?.offsite] ?? 'No configurada';
+  return `<div class="card section stack">
+    <h2 class="with-ic">${ic('database')}Sistema y respaldos</h2>
+    <dl class="dl">
+      <div><dt>Último respaldo</dt><dd>${b?.at ? `<span class="pill ${backupOk ? 'ok' : 'bad'}">${backupOk ? 'Al día' : 'Atrasado'}</span> ${ago(b.at)}` : '<span class="pill bad">Sin respaldos aún</span>'}</dd></div>
+      <div><dt>Copia externa</dt><dd><span class="pill ${b?.offsite === 'ok' ? 'ok' : 'warn'}">${offsite}</span></dd></div>
+      <div><dt>Copias en el servidor</dt><dd>${b?.local_copies ?? 0} (se guardan 30 días)</dd></div>
+      <div><dt>Monitoreo</dt><dd><span class="pill ${sys.monitor ? 'ok' : 'warn'}">${sys.monitor ? 'Activo' : 'Sin configurar'}</span></dd></div>
+      <div><dt>Base de datos</dt><dd>${sys.db_ok ? `Funcionando · ${(sys.db_size / 1048576).toFixed(1)} MB` : 'Sin conexión'}</dd></div>
+      <div><dt>Encendido desde</dt><dd>${ago(new Date(Date.now() - sys.uptime_s * 1000).toISOString())}</dd></div>
+    </dl>
+    <p class="muted"><small>El respaldo se hace solo cada noche a las 2:30. Si el monitoreo está activo, te avisan cuando el sistema deja de responder.</small></p>
+  </div>`;
+}
+
 views.ajustes = {
   async render() {
     const admin = state.me.role === 'admin';
-    const staff = admin ? (await api('/ops/staff')).data : [];
-    const p = state.pricing, b = state.business;
+    const [staff, seasons, sys] = admin
+      ? await Promise.all([api('/ops/staff').then(r => r.data), api('/ops/seasons').then(r => r.data), api('/ops/system').catch(() => null)])
+      : [[], [], null];
+    state.seasons = seasons.length ? seasons : state.seasons;
+    const p = state.pricing, b = state.business, x = state.extras ?? {};
+    const today = localISODate();
     return `
       <div class="view-head"><h1>Ajustes</h1></div>
       ${androidApp ? updateCard() : ''}
@@ -847,8 +1073,31 @@ views.ajustes = {
           <label>Por semana (MXN)<input name="weekly" type="number" min="0" step="0.01" inputmode="decimal" value="${pesos(p.weekly_cents)}"></label>
           <label>Depósito en garantía<input name="deposit" type="number" min="0" step="0.01" inputmode="decimal" value="${pesos(p.deposit_cents)}"></label>
         </div>
-        <p class="muted"><small>Se usan para cotizar en la web y para precargar rentas nuevas. Las rentas ya creadas conservan su precio.</small></p>
+        <p class="muted"><small>Tarifa normal para la web y las rentas nuevas. Las rentas ya creadas conservan su precio.</small></p>
         <p class="form-error" hidden></p><div><button class="btn primary" type="submit">Guardar tarifas</button></div>
+      </form>
+      <div class="card section stack">
+        <div class="row between"><h2 class="with-ic">${ic('sun')}Temporadas</h2><button class="btn sm primary" data-action="season-new">${ic('plus')}Agregar</button></div>
+        <p class="muted" style="margin:0"><small>En estas fechas se cobra la tarifa de la temporada en lugar de la normal (web y panel).</small></p>
+        <div class="list">${seasons.length ? seasons.map(s => `<button class="item" data-action="season-edit" data-id="${s.id}">
+          <div><strong>${esc(s.name)}</strong> ${s.ends_on < today ? '<span class="pill">Pasada</span>' : s.starts_on <= today ? '<span class="pill ok">Vigente</span>' : ''}
+            <div class="meta">${fmtD(s.starts_on)} → ${fmtD(s.ends_on)}</div></div>
+          <div class="right"><div class="amount">${mxn(s.daily_cents)}/día</div><small class="muted">${mxn(s.weekly_cents)}/semana</small></div></button>`).join('')
+          : '<p class="empty">Sin temporadas. Agrega Navidad, Semana Santa o verano con su tarifa.</p>'}</div>
+      </div>
+      <form id="extras" class="card section stack">
+        <h2 class="with-ic">${ic('receipt')}Cargos extra y apartados</h2>
+        <div class="grid2">
+          <label>Horas que se aparta una solicitud web<input name="hold_hours" type="number" min="1" max="168" required value="${x.hold_hours ?? 24}"></label>
+          <label>Tolerancia de retraso (minutos)<input name="late_grace_minutes" type="number" min="0" max="600" required value="${x.late_grace_minutes ?? 60}"></label>
+          <label>Retraso, por hora (MXN)<input name="late_hour" type="number" min="0" step="0.01" inputmode="decimal" value="${pesos(x.late_hour_cents)}"></label>
+          <label>Gasolina, por 1/4 de tanque<input name="fuel_quarter" type="number" min="0" step="0.01" inputmode="decimal" value="${pesos(x.fuel_quarter_cents)}"></label>
+          <label>Entrega a domicilio/aeropuerto<input name="delivery" type="number" min="0" step="0.01" inputmode="decimal" value="${pesos(x.delivery_cents)}"></label>
+          <label>Chofer, por día<input name="driver_day" type="number" min="0" step="0.01" inputmode="decimal" value="${pesos(x.driver_day_cents)}"></label>
+          <label>Limpieza<input name="cleaning" type="number" min="0" step="0.01" inputmode="decimal" value="${pesos(x.cleaning_cents)}"></label>
+        </div>
+        <p class="muted"><small>Al recibir una unidad, el panel calcula solo el retraso (nunca más que la tarifa diaria por cada día) y la gasolina faltante.</small></p>
+        <p class="form-error" hidden></p><div><button class="btn primary" type="submit">Guardar cargos</button></div>
       </form>
       <form id="business" class="card section stack">
         <h2 class="with-ic">${ic('building')}Datos del negocio (contrato)</h2>
@@ -860,18 +1109,25 @@ views.ajustes = {
         </div>
         <label>Domicilio<input name="address" value="${esc(b.address ?? '')}"></label>
         <p class="form-error" hidden></p><div><button class="btn primary" type="submit">Guardar datos</button></div>
-      </form>
+      </form>` : ''}
       <div class="card section stack">
-        <h2 class="with-ic">${ic('van')}Unidades</h2>
-        <div class="list">${state.vehicles.map(v => `<button class="item" data-action="edit-vehicle" data-id="${v.id}">
-          <div><strong>${esc(v.name)}</strong> ${v.active ? '' : '<span class="pill bad">Inactiva</span>'}<div class="meta">${esc(v.plate || 'Sin placas')} · ${v.capacity} pasajeros${v.odometer_km ? ` · ${v.odometer_km.toLocaleString('es-MX')} km` : ''}</div></div><div class="right muted">${ic('edit')}</div></button>`).join('')}</div>
+        <h2 class="with-ic">${ic('van')}Unidades y mantenimiento</h2>
+        <div class="list">${state.vehicles.map(v => `<div class="item vehicle-item">
+          <div><strong>${esc(v.name)}</strong> ${v.active ? '' : '<span class="pill bad">Inactiva</span>'}
+            <div class="meta">${esc(v.plate || 'Sin placas')} · ${v.capacity} pasajeros${v.odometer_km ? ` · ${v.odometer_km.toLocaleString('es-MX')} km` : ''}</div>
+            <div class="meta">Último servicio: ${v.last_service_on ? `${fmtD(v.last_service_on)}${v.last_service_km != null ? ` a los ${v.last_service_km.toLocaleString('es-MX')} km` : ''}` : 'sin registrar'}</div>
+            ${v.alerts?.length ? `<div class="chips-wrap">${alertChips(v.alerts)}</div>` : ''}</div>
+          <div class="right vehicle-actions">
+            <button class="btn sm" data-action="vehicle-service" data-id="${v.id}">${ic('wrench')}Servicio</button>
+            ${admin ? `<button class="btn sm" data-action="edit-vehicle" data-id="${v.id}">${ic('edit')}Editar</button>` : ''}</div></div>`).join('')}</div>
       </div>
-      <div class="card section stack">
+      ${admin ? `<div class="card section stack">
         <div class="row between"><h2 class="with-ic">${ic('users')}Usuarios del panel</h2><button class="btn sm primary" data-action="new-staff">${ic('plus')}Agregar</button></div>
         <div class="list">${staff.map(s => `<button class="item" data-action="edit-staff" data-id="${s.id}">
           <div><strong>${esc(s.full_name)}</strong> ${s.active ? '' : '<span class="pill bad">Sin acceso</span>'}<div class="meta">${esc(s.email)} · ${s.role === 'admin' ? 'Administrador' : 'Operador'} · ${s.devices} dispositivo${s.devices === 1 ? '' : 's'} con avisos</div>
           <div class="meta">${s.last_login_at ? `Último acceso ${fmtDT(s.last_login_at)}` : 'Nunca ha entrado'}</div></div><div class="right muted">${ic('edit')}</div></button>`).join('')}</div>
-      </div>` : ''}
+      </div>
+      ${systemCard(sys)}` : ''}
       <form id="password" class="card section stack">
         <h2 class="with-ic">${ic('key')}Cambiar mi contraseña</h2>
         <div class="grid2">
@@ -889,6 +1145,14 @@ views.ajustes = {
       const res = await api('/ops/settings/pricing', { method: 'PUT', body: { daily_cents: toCents(d.daily), weekly_cents: toCents(d.weekly), deposit_cents: toCents(d.deposit) } });
       state.pricing = res.pricing; toast('Tarifas guardadas');
     });
+    const extras = $('#extras', el);
+    if (extras) onSubmit(extras, async d => {
+      const res = await api('/ops/settings/extras', { method: 'PUT', body: {
+        hold_hours: Number(d.hold_hours), late_grace_minutes: Number(d.late_grace_minutes), late_hour_cents: toCents(d.late_hour),
+        fuel_quarter_cents: toCents(d.fuel_quarter), delivery_cents: toCents(d.delivery), driver_day_cents: toCents(d.driver_day), cleaning_cents: toCents(d.cleaning),
+      } });
+      state.extras = res.extras; toast('Cargos guardados');
+    });
     const business = $('#business', el);
     if (business) onSubmit(business, async d => {
       const res = await api('/ops/settings/business', { method: 'PUT', body: d });
@@ -901,6 +1165,47 @@ views.ajustes = {
   },
 };
 
+function seasonModal(id) {
+  const s = id ? state.seasons.find(x => x.id === id) : null;
+  const p = state.pricing;
+  openModal(`<h2>${s ? `Editar ${esc(s.name)}` : 'Nueva temporada'}</h2><form id="mform" class="stack">
+    <label>Nombre<input name="name" required minlength="2" maxlength="60" placeholder="Ej. Navidad y Año Nuevo" value="${esc(s?.name ?? '')}"></label>
+    <div class="grid2">
+      <label>Desde<input name="starts_on" type="date" required value="${s?.starts_on ?? ''}"></label>
+      <label>Hasta (incluido)<input name="ends_on" type="date" required value="${s?.ends_on ?? ''}"></label>
+      <label>Por día (MXN)<input name="daily" type="number" min="0" step="0.01" inputmode="decimal" required value="${pesos(s?.daily_cents ?? Math.round(p.daily_cents * 1.25))}"></label>
+      <label>Por semana (MXN)<input name="weekly" type="number" min="0" step="0.01" inputmode="decimal" required value="${pesos(s?.weekly_cents ?? Math.round(p.weekly_cents * 1.25))}"></label>
+    </div>
+    <p class="form-error" hidden></p>
+    <div class="row"><button class="btn primary" type="submit">Guardar</button><button class="btn" type="button" data-action="close-modal">Cancelar</button></div>
+    ${s ? `<button class="btn danger block" type="button" data-action="season-delete" data-id="${s.id}">${ic('trash')}Borrar temporada</button>` : ''}</form>`,
+  card => onSubmit($('#mform', card), async d => {
+    const body = { name: d.name, starts_on: d.starts_on, ends_on: d.ends_on, daily_cents: toCents(d.daily), weekly_cents: toCents(d.weekly) };
+    await api(s ? `/ops/seasons/${s.id}` : '/ops/seasons', { method: s ? 'PUT' : 'POST', body });
+    closeModal(); toast('Temporada guardada'); route();
+  }));
+}
+
+function serviceModal(id) {
+  const v = state.vehicles.find(x => x.id === id);
+  openModal(`<h2>Servicio de ${esc(v.name)}</h2><form id="mform" class="stack">
+    <div class="grid2">
+      <label>Kilometraje<input name="km" type="number" min="0" inputmode="numeric" required value="${v.odometer_km ?? ''}"></label>
+      <label>Fecha<input name="date" type="date" required value="${localISODate()}"></label>
+      <label>Costo (opcional)<input name="cost" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Se registra como gasto"></label>
+      <label>Detalle<input name="description" maxlength="300" placeholder="Cambio de aceite y filtros"></label>
+    </div>
+    <p class="muted"><small>El próximo servicio se calcula cada ${v.service_every_km.toLocaleString('es-MX')} km o ${v.service_every_months} meses, lo que llegue primero.</small></p>
+    <p class="form-error" hidden></p>
+    <div class="row"><button class="btn primary" type="submit">Registrar servicio</button><button class="btn" type="button" data-action="close-modal">Cancelar</button></div></form>`,
+  card => onSubmit($('#mform', card), async d => {
+    const { vehicle } = await api(`/ops/vehicles/${id}/service`, { method: 'POST', body: {
+      km: Number(d.km), date: d.date, cost_cents: d.cost ? toCents(d.cost) : undefined, description: d.description || undefined,
+    } });
+    Object.assign(v, vehicle); closeModal(); toast('Servicio registrado'); route();
+  }));
+}
+
 function vehicleModal(id) {
   const v = state.vehicles.find(x => x.id === id);
   openModal(`<h2>Editar ${esc(v.name)}</h2><form id="mform" class="stack">
@@ -912,6 +1217,19 @@ function vehicleModal(id) {
       <label>Color<input name="color" value="${esc(v.color ?? '')}"></label>
       <label>Kilometraje actual<input name="odometer_km" type="number" min="0" value="${v.odometer_km ?? ''}"></label>
     </div>
+    <fieldset class="checks"><legend>Vencimientos</legend>
+      <div class="grid2">
+        <label>Seguro<input name="insurance_expires" type="date" value="${v.insurance_expires ?? ''}"></label>
+        <label>Verificación<input name="verification_expires" type="date" value="${v.verification_expires ?? ''}"></label>
+        <label>Tarjeta de circulación / tenencia<input name="permit_expires" type="date" value="${v.permit_expires ?? ''}"></label>
+      </div>
+    </fieldset>
+    <fieldset class="checks"><legend>Servicio preventivo</legend>
+      <div class="grid2">
+        <label>Cada (km)<input name="service_every_km" type="number" min="500" max="100000" step="500" required value="${v.service_every_km ?? 10000}"></label>
+        <label>O cada (meses)<input name="service_every_months" type="number" min="1" max="36" required value="${v.service_every_months ?? 6}"></label>
+      </div>
+    </fieldset>
     <label>Notas<textarea name="notes">${esc(v.notes ?? '')}</textarea></label>
     <label class="check"><input type="checkbox" name="active" ${v.active ? 'checked' : ''}> Activa (disponible para rentar)</label>
     <p class="form-error" hidden></p>
@@ -921,6 +1239,8 @@ function vehicleModal(id) {
     const { vehicle } = await api(`/ops/vehicles/${id}`, { method: 'PUT', body: {
       name: d.name, plate: d.plate, capacity: Number(d.capacity), model_year: num(d.model_year), color: d.color,
       odometer_km: num(d.odometer_km), notes: d.notes, active: Boolean(d.active),
+      insurance_expires: d.insurance_expires || null, verification_expires: d.verification_expires || null, permit_expires: d.permit_expires || null,
+      service_every_km: Number(d.service_every_km), service_every_months: Number(d.service_every_months),
     } });
     Object.assign(v, vehicle); closeModal(); toast('Unidad guardada'); route();
   }));
@@ -1056,6 +1376,17 @@ document.addEventListener('click', async e => {
     case 'cal-new': location.hash = `#/nueva?vehicle=${el.dataset.vehicle}&date=${el.dataset.date}`; break;
     case 'status': run(() => changeStatus(el.dataset.status)); break;
     case 'add-payment': paymentModal(); break;
+    case 'add-charge': chargeModal(); break;
+    case 'del-charge': if (confirm('¿Quitar este cargo?')) run(async () => { await api(`/ops/charges/${el.dataset.id}`, { method: 'DELETE' }); toast('Cargo quitado'); route(); }); break;
+    case 'sign': signatureModal(); break;
+    case 'sign-delete': if (confirm('¿Quitar la firma del contrato?')) run(async () => { await api(`/ops/reservations/${views.detalle.data.r.id}/signature`, { method: 'DELETE' }); closeModal(); toast('Firma quitada'); route(); }); break;
+    case 'extend-hold': run(async () => {
+      await api(`/ops/reservations/${views.detalle.data.r.id}/status`, { method: 'POST', body: { status: 'hold', hold_hours: state.extras?.hold_hours ?? 24 } });
+      toast(`Apartado extendido ${state.extras?.hold_hours ?? 24} h`); route();
+    }); break;
+    case 'photo-view': openModal(`<h2>${esc(el.dataset.label)}</h2><img class="photo-full" src="/v1/ops/photos/${el.dataset.id}" alt="${esc(el.dataset.label)}">
+      <div class="row"><button class="btn" type="button" data-action="close-modal">Cerrar</button>${state.me.role === 'admin' ? `<button class="btn danger" data-action="photo-delete" data-id="${el.dataset.id}">${ic('trash')}Borrar foto</button>` : ''}</div>`); break;
+    case 'photo-delete': if (confirm('¿Borrar esta foto?')) run(async () => { await api(`/ops/photos/${el.dataset.id}`, { method: 'DELETE' }); closeModal(); toast('Foto borrada'); route(); }); break;
     case 'contract': run(() => contract(el.dataset.id, el.dataset.folio)); break;
     case 'guarantee': run(async () => {
       const { r } = views.detalle.data;
@@ -1066,6 +1397,10 @@ document.addEventListener('click', async e => {
     case 'delete-reservation': if (confirm('¿Eliminar esta renta y sus pagos? No se puede deshacer. Si solo no procede, mejor cancélala.')) run(async () => { await api(`/ops/reservations/${el.dataset.id}`, { method: 'DELETE' }); toast('Renta eliminada'); location.hash = '#/reservas'; }); break;
     case 'del-expense': if (confirm('¿Eliminar este gasto?')) run(async () => { await api(`/ops/expenses/${el.dataset.id}`, { method: 'DELETE' }); toast('Gasto eliminado'); route(); }); break;
     case 'edit-vehicle': vehicleModal(el.dataset.id); break;
+    case 'vehicle-service': serviceModal(el.dataset.id); break;
+    case 'season-new': seasonModal(null); break;
+    case 'season-edit': seasonModal(el.dataset.id); break;
+    case 'season-delete': if (confirm('¿Borrar esta temporada? Las rentas ya creadas conservan su precio.')) run(async () => { await api(`/ops/seasons/${el.dataset.id}`, { method: 'DELETE' }); closeModal(); toast('Temporada borrada'); route(); }); break;
     case 'new-staff': staffModal(null); break;
     case 'edit-staff': run(() => staffModal(el.dataset.id)); break;
     case 'push-on': run(async () => {

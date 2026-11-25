@@ -328,3 +328,52 @@ table.data tfoot td { font-weight: 800; border-bottom: 0; border-top: 2px solid 
 .tip-row b { margin-left: auto; padding-left: 12px; font-variant-numeric: tabular-nums; }
 .tip-row.total { border-top: 1px solid var(--line); padding-top: 4px; font-weight: 700; }
 .tip-row.muted { color: var(--muted); }
+
+/* ───────── Operación: apartados, revisión con fotos, cargos, firma, mantenimiento ───────── */
+.pill.warn { background: var(--warn-bg); color: var(--warn); }
+.pill.with-ic { gap: 4px; }
+.pill .ic { width: 13px; height: 13px; }
+.chips-wrap { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.hold-note { display: inline-flex; align-items: center; gap: 4px; color: var(--info); font-weight: 600; }
+.hold-note .ic { width: 14px; height: 14px; }
+.btn.accent { border-color: var(--teal); color: var(--teal); }
+.signed-note { margin: 10px 0 0; font-size: 13.5px; }
+.signed-note .ic { width: 16px; height: 16px; vertical-align: -3px; margin-right: 2px; }
+
+.inspections { display: grid; gap: 16px; }
+@media (min-width: 900px) { .inspections { grid-template-columns: 1fr 1fr; } }
+.inspection h3 { margin: 0; }
+.photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; }
+.photo { margin: 0; aspect-ratio: 4 / 3; border-radius: 10px; overflow: hidden; position: relative; background: var(--gray-bg); }
+.photo.empty { display: grid; place-content: center; justify-items: center; gap: 4px; border: 1.5px dashed #b9d2d2; background: #f7fbfb;
+  color: var(--muted); font-size: 11.5px; font-weight: 600; text-align: center; padding: 6px; cursor: pointer; }
+.photo.empty .ic { width: 22px; height: 22px; color: var(--teal); }
+.photo.empty:hover { border-color: var(--teal); }
+.photo.uploading { opacity: .5; pointer-events: none; }
+.photo-open { all: unset; display: block; width: 100%; height: 100%; cursor: zoom-in; }
+.photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.photo figcaption { position: absolute; left: 0; right: 0; bottom: 0; display: flex; justify-content: space-between; align-items: center;
+  gap: 4px; padding: 4px 6px; background: linear-gradient(transparent, #0009); color: #fff; font-size: 11px; font-weight: 600; }
+.photo-redo { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 8px; background: #fff3; cursor: pointer; }
+.photo-redo .ic { width: 15px; height: 15px; }
+.photo-full { width: 100%; border-radius: 12px; display: block; }
+.check-list { list-style: none; padding: 0; margin: 10px 0 0; display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; font-size: 13px; }
+.check-list li { display: flex; align-items: center; gap: 5px; }
+.check-list .ic { width: 15px; height: 15px; }
+.check-list .ok .ic { color: var(--ok); } .check-list .miss { color: var(--bad); }
+.damages { margin: 8px 0 0; font-size: 13.5px; background: var(--warn-bg); color: var(--warn); border-radius: 10px; padding: 8px 10px; }
+@media (max-width: 420px) { .photo-grid { grid-template-columns: 1fr 1fr; } .check-list { grid-template-columns: 1fr; } }
+
+fieldset.checks { background: #fafdfd; gap: 8px; }
+.charge-row { display: grid; grid-template-columns: minmax(0, 1fr) 110px; gap: 8px; align-items: center; }
+.charge-row input[type=number] { min-height: 38px; padding: 6px 10px; }
+.money-box .line .btn.icon { width: 30px; min-width: 30px; min-height: 30px; color: var(--muted); }
+
+.sign-pad { position: relative; border: 1.5px dashed #b9d2d2; border-radius: 12px; background: #fff; }
+.sign-pad canvas { display: block; width: 100%; height: 190px; touch-action: none; cursor: crosshair; }
+.sign-hint { position: absolute; left: 0; right: 0; bottom: 36px; text-align: center; color: #b9c8c9; font-size: 13px; pointer-events: none;
+  border-top: 1px solid #e3ecec; margin: 0 24px; padding-top: 6px; }
+
+.vehicle-item { align-items: start; }
+.vehicle-actions { display: grid; gap: 6px; }
+@media (max-width: 520px) { .vehicle-item { grid-template-columns: 1fr; } .vehicle-actions { grid-template-columns: 1fr 1fr; justify-items: stretch; } }

@@ -5,7 +5,8 @@ import { dateSchema, freeVehicles, isoDateTime, logEvent, phoneSchema, upsertCli
 import { buildContract } from '../contract.js';
 import { getSetting, pool, tx } from '../db.js';
 import { env } from '../env.js';
-import { billableDays, quote, type Pricing } from '../pricing.js';
+import { billableDays, quote, seasonalQuote, type Pricing } from '../pricing.js';
+import { chargeInput, extrasSchema, getExtras, getSeasons, insertCharges, VEHICLE_COLUMNS, vehicleAlerts } from '../operations.js';
 import { notifyStaff, pushEnabled } from '../push.js';
 
 const TZ = 'America/Merida';
@@ -18,12 +19,16 @@ const uuid = z.string().uuid();
 const RESERVATION_SELECT = `
   SELECT r.*, v.name AS vehicle_name, v.code AS vehicle_code, v.plate AS vehicle_plate,
          COALESCE(p.paid, 0) AS paid_cents,
-         COALESCE(r.quote_cents, 0) - COALESCE(p.paid, 0) AS balance_cents
+         COALESCE(ch.total, 0) AS charges_cents,
+         COALESCE(r.quote_cents, 0) + COALESCE(ch.total, 0) - COALESCE(p.paid, 0) AS balance_cents,
+         sg.signed_name, sg.signed_at
     FROM reservation r
     LEFT JOIN vehicle v ON v.id = r.vehicle_id
+    LEFT JOIN reservation_signature sg ON sg.reservation_id = r.id
     LEFT JOIN LATERAL (
       SELECT SUM(CASE WHEN kind = 'refund' THEN -amount_cents ELSE amount_cents END) AS paid
-        FROM payment WHERE reservation_id = r.id) p ON true`;
+        FROM payment WHERE reservation_id = r.id) p ON true
+    LEFT JOIN LATERAL (SELECT SUM(amount_cents)::bigint AS total FROM charge WHERE reservation_id = r.id) ch ON true`;
 
 const clientInput = z.object({
   full_name: z.string().trim().min(3).max(150),
@@ -49,6 +54,8 @@ const reservationInput = z.object({
   discount_cents: cents.default(0),
   quote_cents: cents.nullish(),        // total acordado manualmente (si se omite se calcula)
   guarantee_cents: cents.optional(),
+  // auto = tarifas y temporadas vigentes · rates = tarifa personalizada · manual = total acordado
+  price_mode: z.enum(['auto', 'rates', 'manual']).optional(),
 });
 
 type ReservationInput = z.infer<typeof reservationInput>;
@@ -65,6 +72,20 @@ function conflict(error: any) {
   return null;
 }
 
+/** Precio de una renta según su modo: temporadas (auto), tarifa fija (rates) o total acordado (manual). */
+async function priceFor(i: { starts_at: string; ends_at: string; discount_cents: number; daily_rate_cents?: number; weekly_rate_cents?: number; quote_cents?: number | null; price_mode?: string }) {
+  const mode = i.price_mode ?? (i.quote_cents != null ? 'manual' : i.daily_rate_cents != null ? 'rates' : 'auto');
+  const pricing = await getSetting('pricing', DEFAULT_PRICING);
+  if (mode === 'auto') {
+    const q = seasonalQuote(new Date(i.starts_at), new Date(i.ends_at), pricing, await getSeasons());
+    return { mode, ...q, total_cents: Math.max(0, q.total_cents - i.discount_cents) };
+  }
+  const daily = i.daily_rate_cents ?? pricing.daily_cents, weekly = i.weekly_rate_cents ?? pricing.weekly_cents;
+  const q = computeTotal({ ...i, daily_rate_cents: daily, weekly_rate_cents: weekly });
+  return { mode, ...q, seasons: [] as string[], daily_cents: daily, weekly_cents: weekly,
+    total_cents: mode === 'manual' && i.quote_cents != null ? i.quote_cents : q.total_cents };
+}
+
 async function loadReservation(id: string) {
   const { rows } = await pool.query(`${RESERVATION_SELECT} WHERE r.id = $1`, [id]);
   return rows[0];
@@ -78,14 +99,16 @@ export async function opsRoutes(app: FastifyInstance) {
 
   // ───────────────────────── Catálogo y cotizador ─────────────────────────
   app.get('/v1/ops/bootstrap', async req => {
-    const [vehicles, pricing, business] = await Promise.all([
-      pool.query('SELECT id, code, name, plate, capacity, model_year, color, odometer_km, active, notes FROM vehicle ORDER BY code'),
+    const [vehicles, pricing, business, seasons, extras] = await Promise.all([
+      pool.query(`SELECT ${VEHICLE_COLUMNS} FROM vehicle ORDER BY code`),
       getSetting('pricing', DEFAULT_PRICING),
       getSetting('business', {}),
+      getSeasons(),
+      getExtras(),
     ]);
     return {
       user: { id: req.staff!.id, name: req.staff!.full_name, email: req.staff!.email, role: req.staff!.role },
-      vehicles: vehicles.rows, pricing, business,
+      vehicles: vehicles.rows.map(v => ({ ...v, alerts: vehicleAlerts(v) })), pricing, business, seasons, extras,
       push: { enabled: pushEnabled, publicKey: env.VAPID_PUBLIC_KEY ?? null },
     };
   });
@@ -97,11 +120,9 @@ export async function opsRoutes(app: FastifyInstance) {
       weekly_rate_cents: z.coerce.number().int().min(0).optional(),
       discount_cents: z.coerce.number().int().min(0).default(0),
     }).parse(req.query);
-    const pricing = await getSetting('pricing', DEFAULT_PRICING);
-    const total = computeTotal({
+    const total = await priceFor({
       starts_at: q.starts_at, ends_at: q.ends_at, discount_cents: q.discount_cents,
-      daily_rate_cents: q.daily_rate_cents ?? pricing.daily_cents,
-      weekly_rate_cents: q.weekly_rate_cents ?? pricing.weekly_cents,
+      daily_rate_cents: q.daily_rate_cents, weekly_rate_cents: q.weekly_rate_cents,
     });
     const free = new Date(q.ends_at) > new Date(q.starts_at) ? await freeVehicles(pool, q.starts_at, q.ends_at, q.exclude) : [];
     return { ...total, free_vehicle_ids: free.map(v => v.id) };
@@ -180,10 +201,11 @@ export async function opsRoutes(app: FastifyInstance) {
          ORDER BY m`,
         [month],
       ),
-      pool.query(`SELECT count(*)::int AS total FROM reservation WHERE status IN ('new','quoted')`),
+      pool.query(`SELECT count(*)::int AS total FROM reservation WHERE status IN ('new','quoted','hold')`),
       pool.query(
         `SELECT COALESCE(SUM(GREATEST(balance, 0)),0)::bigint AS total FROM (
-           SELECT COALESCE(r.quote_cents,0) - COALESCE((SELECT SUM(CASE WHEN kind='refund' THEN -amount_cents ELSE amount_cents END) FROM payment WHERE reservation_id=r.id),0) AS balance
+           SELECT COALESCE(r.quote_cents,0) + COALESCE((SELECT SUM(amount_cents) FROM charge WHERE reservation_id=r.id),0)
+                  - COALESCE((SELECT SUM(CASE WHEN kind='refund' THEN -amount_cents ELSE amount_cents END) FROM payment WHERE reservation_id=r.id),0) AS balance
              FROM reservation r WHERE r.status IN ('confirmed','assigned','hold','deposit_pending','in_service','completed')) x`,
       ),
       pool.query(
@@ -194,6 +216,8 @@ export async function opsRoutes(app: FastifyInstance) {
       ),
     ]);
     const m = money.rows[0];
+    const maint = await pool.query(`SELECT ${VEHICLE_COLUMNS} FROM vehicle WHERE active`);
+    const alertsById = new Map(maint.rows.map(v => [v.id, vehicleAlerts(v)]));
     const fleetDays = perVehicle.rows.length * m.days_in_month;
     const rentedDays = perVehicle.rows.reduce((s, v) => s + Number(v.rented_days), 0);
     return {
@@ -209,7 +233,7 @@ export async function opsRoutes(app: FastifyInstance) {
       outstanding_cents: outstanding.rows[0].total,
       pending_requests: pending.rows[0].total,
       per_vehicle: perVehicle.rows,
-      fleet: fleet.rows,
+      fleet: fleet.rows.map(v => ({ ...v, alerts: alertsById.get(v.id) ?? [] })),
       agenda: agenda.rows,
       series: series.rows,
     };
@@ -241,36 +265,38 @@ export async function opsRoutes(app: FastifyInstance) {
     const id = uuid.parse(req.params.id);
     const reservation = await loadReservation(id);
     if (!reservation) return reply.code(404).send({ error: { message: 'Reserva no encontrada' } });
-    const [payments, events, client] = await Promise.all([
+    const [payments, events, client, charges, photos] = await Promise.all([
       pool.query(`SELECT p.*, s.full_name AS created_by_name FROM payment p LEFT JOIN staff_user s ON s.id=p.created_by
                    WHERE p.reservation_id=$1 ORDER BY p.paid_at`, [id]),
       pool.query(`SELECT e.event, e.detail, e.occurred_at, COALESCE(s.full_name,'Sitio web') AS actor
                     FROM reservation_event e LEFT JOIN staff_user s ON s.id=e.actor_id
                    WHERE e.reservation_id=$1 ORDER BY e.occurred_at DESC LIMIT 50`, [id]),
       reservation.client_id ? pool.query('SELECT * FROM client WHERE id=$1', [reservation.client_id]) : Promise.resolve({ rows: [] }),
+      pool.query('SELECT id, kind, description, amount_cents, created_at FROM charge WHERE reservation_id=$1 ORDER BY created_at', [id]),
+      pool.query('SELECT id, stage, slot, created_at FROM inspection_photo WHERE reservation_id=$1 ORDER BY created_at', [id]),
     ]);
-    return { reservation, payments: payments.rows, events: events.rows, client: client.rows[0] ?? null };
+    return { reservation, payments: payments.rows, events: events.rows, client: client.rows[0] ?? null, charges: charges.rows, photos: photos.rows };
   });
 
   async function saveReservation(staffId: string, input: ReservationInput, id?: string) {
     const pricing = await getSetting('pricing', DEFAULT_PRICING);
-    const daily = input.daily_rate_cents ?? pricing.daily_cents;
-    const weekly = input.weekly_rate_cents ?? pricing.weekly_cents;
-    const computed = computeTotal({ ...input, daily_rate_cents: daily, weekly_rate_cents: weekly });
-    const total = input.quote_cents ?? computed.total_cents;
+    const price = await priceFor(input);
+    const daily = price.daily_cents, weekly = price.weekly_cents;
+    const total = price.total_cents;
     return tx(async db => {
       const client = await upsertClient(db, input.client, true);
       const values = [
         input.status, input.starts_at, input.ends_at, input.pickup ?? 'Oficina', input.destination, input.client.full_name,
         input.client.phone, input.client.email, input.notes, client.id, input.vehicle_id, daily, weekly,
-        input.discount_cents, total, input.guarantee_cents ?? pricing.deposit_cents, staffId,
+        input.discount_cents, total, input.guarantee_cents ?? pricing.deposit_cents, staffId, price.mode,
       ];
       if (id) {
         const { rows } = await db.query(
           `UPDATE reservation SET status=$1, starts_at=$2, ends_at=$3, pickup=$4, destination=$5, client_name=$6,
              client_phone=$7, client_email=$8, notes=$9, client_id=$10, vehicle_id=$11, daily_rate_cents=$12,
-             weekly_rate_cents=$13, discount_cents=$14, quote_cents=$15, guarantee_cents=$16, updated_by=$17, updated_at=now()
-           WHERE id=$18 RETURNING id`, [...values, id]);
+             weekly_rate_cents=$13, discount_cents=$14, quote_cents=$15, guarantee_cents=$16, updated_by=$17, updated_at=now(),
+             price_mode=$18, hold_until = CASE WHEN $1::reservation_status = 'hold' THEN hold_until ELSE NULL END
+           WHERE id=$19 RETURNING id`, [...values, id]);
         if (!rows[0]) return null;
         await logEvent(db, id, staffId, 'updated', { status: input.status, total_cents: total });
         return id;
@@ -278,8 +304,8 @@ export async function opsRoutes(app: FastifyInstance) {
       const { rows } = await db.query(
         `INSERT INTO reservation (status, starts_at, ends_at, pickup, destination, client_name, client_phone, client_email,
             notes, client_id, vehicle_id, daily_rate_cents, weekly_rate_cents, discount_cents, quote_cents, guarantee_cents,
-            created_by, updated_by, service, passengers, source)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$17,'rental',1,'staff') RETURNING id`, values);
+            created_by, updated_by, service, passengers, source, price_mode)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$17,'rental',1,'staff',$18) RETURNING id`, values);
       await logEvent(db, rows[0].id, staffId, 'created', { status: input.status, total_cents: total });
       return rows[0].id as string;
     });
@@ -318,6 +344,12 @@ export async function opsRoutes(app: FastifyInstance) {
       km: z.number().int().min(0).max(2_000_000).optional(),
       fuel: z.string().trim().max(20).optional(),
       guarantee_returned: z.boolean().optional(),
+      hold_hours: z.number().int().min(1).max(168).optional(),   // apartar / extender el apartado
+      checklist: z.object({
+        items: z.record(z.string().max(30), z.boolean()).optional(),
+        damages: z.string().trim().max(1000).optional(),
+      }).optional(),
+      charges: z.array(chargeInput).max(10).optional(),
     }).parse(req.body);
     try {
       const updated = await tx(async db => {
@@ -333,14 +365,19 @@ export async function opsRoutes(app: FastifyInstance) {
              returned_at = CASE WHEN $8='completed' THEN COALESCE(returned_at, now()) ELSE returned_at END,
              km_in = CASE WHEN $8='completed' THEN COALESCE($5, km_in) ELSE km_in END,
              fuel_in = CASE WHEN $8='completed' THEN COALESCE($6, fuel_in) ELSE fuel_in END,
-             guarantee_returned = COALESCE($7, guarantee_returned)
+             guarantee_returned = COALESCE($7, guarantee_returned),
+             hold_until = CASE WHEN $8='hold' THEN COALESCE(now() + make_interval(hours => $9::int), hold_until) ELSE NULL END,
+             checklist_out = CASE WHEN $8='in_service' THEN COALESCE($10::jsonb, checklist_out) ELSE checklist_out END,
+             checklist_in = CASE WHEN $8='completed' THEN COALESCE($10::jsonb, checklist_in) ELSE checklist_in END
            WHERE id=$1`,
-          [id, b.status, vehicleId, req.staff!.id, b.km ?? null, b.fuel ?? null, b.guarantee_returned ?? null, String(b.status)],
+          [id, b.status, vehicleId, req.staff!.id, b.km ?? null, b.fuel ?? null, b.guarantee_returned ?? null, String(b.status),
+            b.hold_hours ?? null, b.checklist ? JSON.stringify(b.checklist) : null],
         );
+        if (b.charges?.length) await insertCharges(db, id, req.staff!.id, b.charges);
         if (b.km !== undefined && vehicleId) {
           await db.query('UPDATE vehicle SET odometer_km = GREATEST(COALESCE(odometer_km,0), $2) WHERE id=$1', [vehicleId, b.km]);
         }
-        await logEvent(db, id, req.staff!.id, `status:${b.status}`, { km: b.km, fuel: b.fuel });
+        await logEvent(db, id, req.staff!.id, `status:${b.status}`, { km: b.km, fuel: b.fuel, hold_hours: b.hold_hours });
         return true;
       });
       if (!updated) return reply.code(404).send({ error: { message: 'Reserva no encontrada' } });
@@ -362,12 +399,15 @@ export async function opsRoutes(app: FastifyInstance) {
     const id = uuid.parse(req.params.id);
     const reservation = await loadReservation(id);
     if (!reservation) return reply.code(404).send({ error: { message: 'Reserva no encontrada' } });
-    const [client, payments, business] = await Promise.all([
+    const [client, payments, business, charges, signature] = await Promise.all([
       reservation.client_id ? pool.query('SELECT * FROM client WHERE id=$1', [reservation.client_id]) : Promise.resolve({ rows: [] }),
       pool.query('SELECT * FROM payment WHERE reservation_id=$1 ORDER BY paid_at', [id]),
       getSetting('business', { name: 'Turi Express MX', phone: '', city: 'Mérida, Yucatán', legal_name: '', address: '' }),
+      pool.query('SELECT kind, description, amount_cents FROM charge WHERE reservation_id=$1 ORDER BY created_at', [id]),
+      pool.query('SELECT png, signed_name, signed_at FROM reservation_signature WHERE reservation_id=$1', [id]),
     ]);
-    const pdf = await buildContract({ reservation, client: client.rows[0] ?? null, payments: payments.rows, business });
+    const pdf = await buildContract({ reservation, client: client.rows[0] ?? null, payments: payments.rows, business,
+      charges: charges.rows, signature: signature.rows[0] ?? null });
     return reply
       .type('application/pdf')
       .header('content-disposition', `inline; filename="contrato-${reservation.folio}.pdf"`)
@@ -495,20 +535,28 @@ export async function opsRoutes(app: FastifyInstance) {
       odometer_km: z.number().int().min(0).max(2_000_000).nullish(),
       active: z.boolean(),
       notes: optText(1000),
+      insurance_expires: dateSchema.nullish(),
+      verification_expires: dateSchema.nullish(),
+      permit_expires: dateSchema.nullish(),
+      service_every_km: z.number().int().min(500).max(100_000).default(10000),
+      service_every_months: z.number().int().min(1).max(36).default(6),
     }).parse(req.body);
     const { rows } = await pool.query(
-      `UPDATE vehicle SET name=$2, plate=$3, capacity=$4, model_year=$5, color=$6, odometer_km=$7, active=$8, notes=$9
-        WHERE id=$1 RETURNING *`,
-      [id, b.name, b.plate, b.capacity, b.model_year ?? null, b.color, b.odometer_km ?? null, b.active, b.notes],
+      `UPDATE vehicle SET name=$2, plate=$3, capacity=$4, model_year=$5, color=$6, odometer_km=$7, active=$8, notes=$9,
+          insurance_expires=$10, verification_expires=$11, permit_expires=$12, service_every_km=$13, service_every_months=$14
+        WHERE id=$1 RETURNING ${VEHICLE_COLUMNS}`,
+      [id, b.name, b.plate, b.capacity, b.model_year ?? null, b.color, b.odometer_km ?? null, b.active, b.notes,
+        b.insurance_expires ?? null, b.verification_expires ?? null, b.permit_expires ?? null, b.service_every_km, b.service_every_months],
     );
     if (!rows[0]) return reply.code(404).send({ error: { message: 'Unidad no encontrada' } });
-    return { vehicle: rows[0] };
+    return { vehicle: { ...rows[0], alerts: vehicleAlerts(rows[0]) } };
   });
 
   app.put('/v1/ops/settings/:key', { preHandler: requireAdmin }, async (req: any) => {
-    const key = z.enum(['pricing', 'business']).parse(req.params.key);
+    const key = z.enum(['pricing', 'business', 'extras']).parse(req.params.key);
     const value = key === 'pricing'
       ? z.object({ daily_cents: cents, weekly_cents: cents, deposit_cents: cents }).parse(req.body)
+      : key === 'extras' ? extrasSchema.parse(req.body)
       : z.object({
         name: z.string().trim().min(2).max(120), phone: z.string().trim().max(25), city: z.string().trim().max(120),
         legal_name: z.string().trim().max(200), address: z.string().trim().max(300),

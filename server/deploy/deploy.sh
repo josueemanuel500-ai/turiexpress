@@ -19,6 +19,10 @@ if ! grep -q '^VAPID_PUBLIC_KEY=.\+' .env; then
   echo "Claves VAPID generadas."
 fi
 
+# Respaldo nocturno automático (sin sudo: crontab del usuario) y carpeta de fotos.
+mkdir -p uploads
+( crontab -l 2>/dev/null | grep -v 'deploy/backup.sh'; echo "30 2 * * * bash $PWD/deploy/backup.sh >> $HOME/backups/backup.log 2>&1" ) | crontab -
+
 npm ci --no-audit --no-fund
 npm run build
 sudo /usr/bin/systemctl restart turiexpress-api

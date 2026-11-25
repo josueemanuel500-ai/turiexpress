@@ -17,3 +17,4 @@ server/.env
 # APK publicados para descarga desde el panel (se suben al servidor, no van en git)
 server/downloads/*
 !server/downloads/.gitkeep
+server/uploads/

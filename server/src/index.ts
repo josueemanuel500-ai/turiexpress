@@ -13,6 +13,7 @@ import { allowedOrigins, env } from './env.js';
 import { migrate } from './migrate.js';
 import { startReminders } from './reminders.js';
 import { opsRoutes } from './routes/ops.js';
+import { operationsRoutes } from './operations.js';
 import { publicRoutes } from './routes/public.js';
 
 // Detrás del túnel de Cloudflare: la IP real del visitante viene en cabeceras.
@@ -94,6 +95,7 @@ app.get('/.well-known/assetlinks.json', async (_req, reply) => reply.header('cac
 await app.register(authRoutes);
 await app.register(publicRoutes);
 await app.register(opsRoutes);
+await app.register(operationsRoutes);
 
 app.setNotFoundHandler((req, reply) => {
   if (req.url.startsWith('/v1/') || req.url.startsWith('/descargas/')) return reply.code(404).send({ error: { message: 'Ruta no encontrada' } });

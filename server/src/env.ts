@@ -18,6 +18,10 @@ export const env = z.object({
   TZ_BUSINESS: z.string().default('America/Merida'),
   // En desarrollo local la cookie no puede ser Secure (http).
   COOKIE_SECURE: z.enum(['true', 'false']).default('true'),
+  // Carpeta de fotos de revisión (por defecto server/uploads).
+  UPLOAD_DIR: z.string().optional(),
+  // Monitoreo (healthchecks.io u otro): la API manda una señal cada 5 min; si deja de llegar, te avisan.
+  HEALTHCHECK_URL: z.string().url().optional(),
 }).parse(process.env);
 
 export const allowedOrigins = [

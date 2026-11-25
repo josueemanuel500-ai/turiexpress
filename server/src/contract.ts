@@ -7,6 +7,8 @@ type Input = {
   client: any | null;
   payments: any[];
   business: { name?: string; phone?: string; city?: string; legal_name?: string; address?: string };
+  charges?: { kind: string; description: string | null; amount_cents: number }[];
+  signature?: { png: string; signed_name: string; signed_at: string } | null;
 };
 
 const TZ = 'America/Merida';
@@ -16,6 +18,8 @@ const fmtDate = (d: string | Date | null | undefined) =>
   d ? new Date(d).toLocaleDateString('es-MX', { timeZone: TZ, dateStyle: 'medium' }) : '—';
 const KIND: Record<string, string> = { deposit: 'Anticipo', payment: 'Pago', refund: 'Reembolso' };
 const METHOD: Record<string, string> = { cash: 'Efectivo', transfer: 'Transferencia', card: 'Tarjeta', other: 'Otro' };
+
+const CHARGE: Record<string, string> = { late: 'Devolución tardía', fuel: 'Combustible faltante', delivery: 'Entrega/recolección', driver: 'Chofer', cleaning: 'Limpieza', damage: 'Daños', other: 'Otro' };
 
 const CLAUSES = [
   'La unidad se entrega y debe devolverse con el mismo nivel de combustible. El faltante se cobrará al precio vigente más el servicio de recarga.',
@@ -28,7 +32,7 @@ const CLAUSES = [
   'Los viajes fuera del área metropolitana deben acordarse previamente con la arrendadora.',
 ];
 
-export function buildContract({ reservation: r, client: c, payments, business }: Input): Promise<Buffer> {
+export function buildContract({ reservation: r, client: c, payments, business, charges = [], signature = null }: Input): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: 'LETTER', margin: 48, info: { Title: `Contrato ${r.folio}`, Author: business.name ?? 'Turi Express MX' } });
     const chunks: Buffer[] = [];
@@ -89,12 +93,20 @@ export function buildContract({ reservation: r, client: c, payments, business }:
 
     section('Importes');
     const paid = payments.reduce((s, p) => s + (p.kind === 'refund' ? -p.amount_cents : p.amount_cents), 0);
+    const extra = charges.reduce((s, ch) => s + ch.amount_cents, 0);
     rows([
       ['Tarifa diaria', money(r.daily_rate_cents)], ['Tarifa semanal', money(r.weekly_rate_cents)],
       ['Descuento', money(r.discount_cents)], ['Total de la renta', money(r.quote_cents)],
-      ['Pagado', money(paid)], ['Saldo pendiente', money((r.quote_cents ?? 0) - paid)],
+      ['Cargos extra', money(extra)], ['Total a pagar', money((r.quote_cents ?? 0) + extra)],
+      ['Pagado', money(paid)], ['Saldo pendiente', money((r.quote_cents ?? 0) + extra - paid)],
       ['Depósito en garantía (reembolsable)', money(r.guarantee_cents)], ['Garantía devuelta', r.guarantee_returned ? 'Sí' : 'No'],
     ]);
+    if (charges.length) {
+      doc.font('Helvetica').fontSize(8).fillColor(muted).text('Cargos extra:', 48);
+      for (const ch of charges) {
+        doc.fontSize(9).fillColor(ink).text(`• ${CHARGE[ch.kind] ?? ch.kind}${ch.description ? ` (${ch.description})` : ''} — ${money(ch.amount_cents)}`, 56);
+      }
+    }
     if (payments.length) {
       doc.font('Helvetica').fontSize(8).fillColor(muted).text('Pagos registrados:', 48);
       for (const p of payments) {
@@ -117,8 +129,12 @@ export function buildContract({ reservation: r, client: c, payments, business }:
     const sw = (W - 40) / 2;
     doc.moveTo(48, y).lineTo(48 + sw, y).strokeColor(ink).stroke();
     doc.moveTo(88 + sw, y).lineTo(88 + 2 * sw, y).stroke();
+    if (signature?.png) {
+      const img = Buffer.from(signature.png.replace(/^data:image\/png;base64,/, ''), 'base64');
+      doc.image(img, 48 + 10, y - 58, { fit: [sw - 20, 54], align: 'center', valign: 'bottom' });
+    }
     doc.font('Helvetica').fontSize(9).fillColor(ink)
-      .text(`Arrendatario: ${r.client_name}`, 48, y + 6, { width: sw, align: 'center' })
+      .text(`Arrendatario: ${signature?.signed_name ?? r.client_name}`, 48, y + 6, { width: sw, align: 'center' })
       .text(`Por ${business.name || 'Turi Express MX'}`, 88 + sw, y + 6, { width: sw, align: 'center' });
 
     doc.end();

@@ -93,15 +93,25 @@ function quote(days) {
   return weeks * p.weekly_cents + Math.min(rest * p.daily_cents, p.weekly_cents);
 }
 
+let estimateTicket = 0;
 function renderEstimate() {
   const box = document.querySelector('#price-estimate');
   if (!box) return;
   const days = rentalDays();
   const total = days ? quote(days) : null;
   if (!days || total === null) { box.hidden = true; return; }
-  box.hidden = false;
-  box.innerHTML = `<strong>${days} día${days === 1 ? '' : 's'} · estimado ${mxn(total)} MXN</strong>
-    <small>${state.pricing.deposit_cents ? `Más depósito en garantía reembolsable de ${mxn(state.pricing.deposit_cents)}. ` : ''}El precio final se confirma por WhatsApp.</small>`;
+  const paint = (amount, seasons = []) => {
+    box.hidden = false;
+    box.innerHTML = `<strong>${days} día${days === 1 ? '' : 's'} · estimado ${mxn(amount)} MXN</strong>
+      <small>${seasons.length ? `Incluye tarifa de temporada (${seasons.join(', ')}). ` : ''}${state.pricing.deposit_cents ? `Más depósito en garantía reembolsable de ${mxn(state.pricing.deposit_cents)}. ` : ''}El precio final se confirma por WhatsApp.</small>`;
+  };
+  paint(total);
+  // Precio exacto del servidor (considera temporadas: Navidad, Semana Santa, verano…).
+  const ticket = ++estimateTicket;
+  fetch(`${API_BASE}/public/quote?start_date=${iso(state.start)}&end_date=${iso(state.end)}`)
+    .then(r => (r.ok ? r.json() : null))
+    .then(q => { if (q && ticket === estimateTicket && q.days) paint(q.total_cents, q.seasons); })
+    .catch(() => {});
 }
 
 function selectDate(date) {
@@ -175,7 +185,7 @@ document.querySelector('#booking-form').addEventListener('submit', async event =
   if (response && response.ok && data?.reservation) {
     const r = data.reservation;
     text = `${base} Mi folio es ${r.folio}${r.total_cents ? ` y el estimado es ${mxn(r.total_cents)}` : ''}. ¿Me confirman?`;
-    message.textContent = `¡Listo! Tu folio es ${r.folio}. Te esperamos en WhatsApp para confirmar.`;
+    message.textContent = `¡Listo! Tu folio es ${r.folio} y te apartamos la unidad unas horas. Escríbenos por WhatsApp para confirmarla.`;
   } else if (response && response.status === 409) {
     if (whatsappTab) whatsappTab.close();
     message.textContent = data?.error?.message || 'Esas fechas se acaban de ocupar. Elige otras.';

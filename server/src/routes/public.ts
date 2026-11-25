@@ -2,13 +2,25 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { BLOCKING, BUSINESS_OFFSET, dateSchema, freeVehicles, logEvent, money, phoneSchema, upsertClient } from '../common.js';
 import { getSetting, pool, tx } from '../db.js';
-import { billableDays, quote, type Pricing } from '../pricing.js';
+import { seasonalQuote, type Pricing } from '../pricing.js';
+import { getExtras, getSeasons } from '../operations.js';
 import { notifyStaff } from '../push.js';
 
 const DEFAULT_PRICING: Pricing = { daily_cents: 0, weekly_cents: 0, deposit_cents: 0 };
 
 export async function publicRoutes(app: FastifyInstance) {
   app.get('/v1/health', async () => ({ ok: true }));
+
+  /** Cotización para el sitio: incluye temporadas (precios especiales por fecha). */
+  app.get('/v1/public/quote', async req => {
+    const q = z.object({ start_date: dateSchema, end_date: dateSchema, start_time: z.string().regex(/^\d{2}:\d{2}$/).default('09:00') }).parse(req.query);
+    const startsAt = new Date(`${q.start_date}T${q.start_time}:00${BUSINESS_OFFSET}`);
+    const endsAt = new Date(`${q.end_date}T${q.start_time}:00${BUSINESS_OFFSET}`);
+    if (endsAt <= startsAt) return { days: 0, total_cents: 0, seasons: [] };
+    const pricing = await getSetting('pricing', DEFAULT_PRICING);
+    const r = seasonalQuote(startsAt, endsAt, pricing, await getSeasons());
+    return { days: r.days, total_cents: r.total_cents, seasons: r.seasons, deposit_cents: pricing.deposit_cents };
+  });
 
   app.get('/v1/public/pricing', async () => {
     const p = await getSetting('pricing', DEFAULT_PRICING);
@@ -56,20 +68,23 @@ export async function publicRoutes(app: FastifyInstance) {
     }
 
     const pricing = await getSetting('pricing', DEFAULT_PRICING);
-    const days = billableDays(new Date(startsAt), new Date(endsAt));
-    const q = quote(days, pricing);
+    const q = seasonalQuote(new Date(startsAt), new Date(endsAt), pricing, await getSeasons());
+    const days = q.days;
+    const { hold_hours } = await getExtras();
 
+    // La solicitud aparta la unidad unas horas (estado "Apartada"): nadie más puede pedir esas fechas
+    // mientras la confirmas. Si no se confirma a tiempo, se libera sola (ver reminders.ts).
     const result = await tx(async db => {
       const free = await freeVehicles(db, startsAt, endsAt);
       if (!free.length) return null;
       const client = await upsertClient(db, { full_name: b.client_name, phone: b.client_phone }, false);
       const { rows } = await db.query(
         `INSERT INTO reservation (service,status,starts_at,ends_at,pickup,passengers,client_name,client_phone,notes,
-            client_id,vehicle_id,daily_rate_cents,weekly_rate_cents,quote_cents,guarantee_cents,source)
-         VALUES ('rental','new',$1,$2,$3,1,$4,$5,$6,$7,$8,$9,$10,$11,$12,'website')
+            client_id,vehicle_id,daily_rate_cents,weekly_rate_cents,quote_cents,guarantee_cents,source,price_mode,hold_until)
+         VALUES ('rental','hold',$1,$2,$3,1,$4,$5,$6,$7,$8,$9,$10,$11,$12,'website','auto', now() + make_interval(hours => $13::int))
          RETURNING id, folio`,
         [startsAt, endsAt, b.pickup || 'Por confirmar', b.client_name, b.client_phone, b.notes ?? null,
-          client.id, free[0].id, pricing.daily_cents, pricing.weekly_cents, q.total_cents, pricing.deposit_cents],
+          client.id, free[0].id, q.daily_cents, q.weekly_cents, q.total_cents, pricing.deposit_cents, hold_hours],
       );
       await logEvent(db, rows[0].id, null, 'created_public', { source: 'website' });
       return { ...rows[0], vehicle: free[0].name, blocked: client.blocked };
