@@ -21,7 +21,8 @@ fi
 
 # Respaldo nocturno automático (sin sudo: crontab del usuario) y carpeta de fotos.
 mkdir -p uploads
-( crontab -l 2>/dev/null | grep -v 'deploy/backup.sh'; echo "30 2 * * * bash $PWD/deploy/backup.sh >> $HOME/backups/backup.log 2>&1" ) | crontab -
+{ crontab -l 2>/dev/null | grep -v 'deploy/backup.sh' || true; echo "30 2 * * * bash $PWD/deploy/backup.sh >> $HOME/backups/backup.log 2>&1"; } | crontab -
+echo "Respaldo nocturno programado (02:30)." 
 
 npm ci --no-audit --no-fund
 npm run build
