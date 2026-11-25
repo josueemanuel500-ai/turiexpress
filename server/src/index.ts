@@ -96,7 +96,7 @@ await app.register(publicRoutes);
 await app.register(opsRoutes);
 
 app.setNotFoundHandler((req, reply) => {
-  if (req.url.startsWith('/v1/')) return reply.code(404).send({ error: { message: 'Ruta no encontrada' } });
+  if (req.url.startsWith('/v1/') || req.url.startsWith('/descargas/')) return reply.code(404).send({ error: { message: 'Ruta no encontrada' } });
   return reply.sendFile('index.html');
 });
 
