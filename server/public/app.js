@@ -1,10 +1,10 @@
 // Panel de Turi Express. Sin dependencias ni compilación: módulos nativos del navegador.
 // La sesión vive en una cookie httpOnly (el JavaScript nunca ve el token).
 
-import { ic, hydrateIcons } from './icons.js?v=7';
-import { mountCharts, hideTip, SERIES, OTHER } from './charts.js?v=7';
+import { ic, hydrateIcons } from './icons.js?v=8';
+import { mountCharts, hideTip, SERIES, OTHER } from './charts.js?v=8';
 
-const APP_VERSION = '1.3.1'; // Versión del panel; debe coincidir con version.json al desplegar.
+const APP_VERSION = '1.3.2'; // Versión del panel; debe coincidir con version.json al desplegar.
 const TZ = 'America/Merida';
 const OFFSET_H = 6; // Mérida: UTC-6 todo el año
 const $ = (s, el = document) => el.querySelector(s);
@@ -892,32 +892,58 @@ views.calendario = {
     const last = `${month}-${String(daysInMonth).padStart(2, '0')}`;
     const { data } = await api(`/ops/reservations?from=${first}&to=${last}&status=new,quoted,hold,deposit_pending,confirmed,assigned,in_service,completed&limit=500`);
     const today = localISODate();
+    const isCurrent = month === thisMonth();
     const days = Array.from({ length: daysInMonth }, (_, i) => `${month}-${String(i + 1).padStart(2, '0')}`);
+    const dayClass = d => {
+      const dow = new Date(`${d}T12:00:00Z`).getUTCDay();
+      return [d === today ? 'today' : '', d < today ? 'past' : '', dow === 0 || dow === 6 ? 'weekend' : ''].join(' ');
+    };
     const head = days.map(d => {
       const dow = new Date(`${d}T12:00:00Z`).getUTCDay();
-      return `<th class="${d === today ? 'today' : ''} ${dow === 0 || dow === 6 ? 'weekend' : ''}">${'DLMMJVS'[dow]}<br>${Number(d.slice(8))}</th>`;
+      return `<th class="${dayClass(d)}"><small>${'DLMMJVS'[dow]}</small><b>${Number(d.slice(8))}</b></th>`;
     }).join('');
-    const rows = state.vehicles.filter(v => v.active).map(v => {
+    const active = state.vehicles.filter(v => v.active);
+    const busyToday = new Set();
+    const rows = active.map(v => {
       const mine = data.filter(r => r.vehicle_id === v.id).map(r => ({ ...r, s: localISODate(new Date(r.starts_at)), e: localISODate(new Date(r.ends_at)) }));
+      if (mine.some(x => x.s <= today && x.e >= today && x.status !== 'completed')) busyToday.add(v.id);
       const cells = days.map(d => {
         const r = mine.find(x => x.s <= d && x.e >= d && x.status !== 'completed') ?? mine.find(x => x.s <= d && x.e >= d);
-        if (!r) return `<td class="day" data-action="cal-new" data-vehicle="${v.id}" data-date="${d}" title="Libre · toca para crear renta"></td>`;
+        if (!r) {
+          return d < today
+            ? `<td class="day ${dayClass(d)}"></td>`
+            : `<td class="day free ${dayClass(d)}" data-action="cal-new" data-vehicle="${v.id}" data-date="${d}" title="Libre · toca para crear renta"></td>`;
+        }
         const start = r.s === d || d === first, end = r.e === d || d === last;
-        return `<td class="busy s-${r.status} ${start ? 'start' : ''} ${end ? 'end' : ''}" data-action="go" data-href="#/reservas/${r.id}" title="${esc(r.client_name)} · ${STATUS[r.status]}"><span>${start ? esc(r.client_name.split(' ')[0]) : '&nbsp;'}</span></td>`;
+        const group = ['new', 'quoted', 'hold'].includes(r.status) ? 'pending' : r.status;
+        return `<td class="busy s-${group} ${start ? 'start' : ''} ${end ? 'end' : ''} ${dayClass(d)}" data-action="go" data-href="#/reservas/${r.id}" title="${esc(r.client_name)} · ${STATUS[r.status]} · ${fmtD(r.starts_at)} → ${fmtD(r.ends_at)}"><span>${start ? esc(r.client_name.split(' ')[0]) : '&nbsp;'}</span></td>`;
       }).join('');
       return `<tr><td class="unit-col">${esc(v.name)}</td>${cells}</tr>`;
     }).join('');
-    const unassigned = data.filter(r => !r.vehicle_id && ['new', 'quoted'].includes(r.status));
+    const unassigned = data.filter(r => !r.vehicle_id && ['new', 'quoted', 'hold'].includes(r.status));
+    const free = active.length - busyToday.size;
     return `
       <div class="view-head"><h1>Calendario</h1>
-        ${monthNav('calendario', month)}</div>
-      <div class="cal"><table><thead><tr><th class="unit-col">Unidad</th>${head}</tr></thead><tbody>${rows}</tbody></table></div>
-      <div class="legend" style="flex-wrap:wrap">
-        <span><i style="background:#e8a33a"></i>Solicitud</span><span><i style="background:#3b7be0"></i>Confirmada</span>
-        <span><i style="background:#6b4fd8"></i>En renta</span><span><i style="background:#6cbf92"></i>Terminada</span>
-        <span>Toca un día libre para crear una renta.</span>
+        <div class="cal-nav">${monthNav('calendario', month)}${isCurrent ? '' : `<a class="btn sm primary" href="#/calendario">${ic('calendar')}Hoy</a>`}</div></div>
+      ${isCurrent ? `<div class="cal-today">
+        <span class="with-ic">${ic('calendar')}<strong>Hoy, ${fmtD(today)}</strong></span>
+        <span class="pill ok">${free} libre${free === 1 ? '' : 's'}</span>
+        <span class="pill in_service">${busyToday.size} ocupada${busyToday.size === 1 ? '' : 's'}</span></div>` : ''}
+      <div class="cal" id="cal-scroll"><table><thead><tr><th class="unit-col">Unidad</th>${head}</tr></thead><tbody>${rows}</tbody></table></div>
+      <div class="legend cal-legend">
+        <span><i class="s-pending"></i>Solicitud / apartada</span><span><i class="s-confirmed"></i>Confirmada</span>
+        <span><i class="s-in_service"></i>En renta</span><span><i class="s-completed"></i>Terminada</span>
       </div>
+      <p class="muted"><small>Toca un día libre para crear una renta, o una barra para ver la renta. Desliza a los lados para ver más días.</small></p>
       ${unassigned.length ? `<div class="section"><h2>Solicitudes sin unidad</h2><div class="list">${unassigned.map(reservationItem).join('')}</div></div>` : ''}`;
+  },
+  after(el) {
+    // Abre centrado en el día de hoy (dejando 2 días antes a la vista) en lugar del día 1.
+    const box = $('#cal-scroll', el);
+    const todayTh = $('thead th.today', el);
+    if (!box || !todayTh) return;
+    const unitW = $('thead th.unit-col', el).offsetWidth;
+    box.scrollLeft = Math.max(0, todayTh.offsetLeft - unitW - todayTh.offsetWidth * 2);
   },
 };
 
