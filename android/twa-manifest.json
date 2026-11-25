@@ -1,6 +1,6 @@
 {
   "packageId": "mx.com.turiexpress.panel",
-  "host": "panel.turiexpress.com.mx",
+  "host": "api.turiexpress.com.mx",
   "name": "Turi Express · Panel",
   "launcherName": "Turi Panel",
   "display": "standalone",
@@ -21,8 +21,8 @@
     "path": "../../android-firma/turiexpress-panel.jks",
     "alias": "turipanel"
   },
-  "appVersionName": "1.0.0",
-  "appVersionCode": 1,
+  "appVersionName": "1.0.1",
+  "appVersionCode": 2,
   "shortcuts": [
     {
       "name": "Nueva renta",
@@ -53,5 +53,5 @@
   "additionalTrustedOrigins": [],
   "retainedBundles": [],
   "displayOverride": [],
-  "appVersion": "1.0.0"
+  "appVersion": "1.0.1"
 }

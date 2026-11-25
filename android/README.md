@@ -1,6 +1,6 @@
 # App Android "Turi Panel"
 
-Trusted Web Activity (generada con Bubblewrap) que abre el panel `https://panel.turiexpress.com.mx`
+Trusted Web Activity (generada con Bubblewrap) que abre el panel `https://api.turiexpress.com.mx`
 a pantalla completa y entrega las notificaciones push como notificaciones nativas de Android.
 
 - Paquete: `mx.com.turiexpress.panel`
