@@ -1,7 +1,7 @@
 // Operación diaria: temporadas, cargos extra, revisión con fotos, firma, mantenimiento y estado del sistema.
 import type { FastifyInstance } from 'fastify';
 import { randomBytes } from 'node:crypto';
-import { mkdir, readFile, rm, stat, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, stat, statfs, unlink, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { z } from 'zod';
@@ -232,8 +232,10 @@ export async function operationsRoutes(app: FastifyInstance) {
     const backup = await readFile(BACKUP_STATUS, 'utf8').then(JSON.parse).catch(() => null);
     const uploads = await stat(UPLOAD_DIR).then(() => true).catch(() => false);
     const db = await pool.query('SELECT now() AS now, pg_database_size(current_database())::bigint AS size').then(r => r.rows[0]).catch(() => null);
+    const fs = await statfs('/').catch(() => null);
     return {
       uptime_s: Math.round(process.uptime()), db_ok: Boolean(db), db_size: db?.size ?? null, uploads,
+      disk: fs ? { free: fs.bavail * fs.bsize, total: fs.blocks * fs.bsize } : null,
       monitor: Boolean(env.HEALTHCHECK_URL), backup,
     };
   });

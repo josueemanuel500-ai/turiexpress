@@ -1,10 +1,10 @@
 // Panel de Turi Express. Sin dependencias ni compilación: módulos nativos del navegador.
 // La sesión vive en una cookie httpOnly (el JavaScript nunca ve el token).
 
-import { ic, hydrateIcons } from './icons.js?v=8';
-import { mountCharts, hideTip, SERIES, OTHER } from './charts.js?v=8';
+import { ic, hydrateIcons } from './icons.js?v=9';
+import { mountCharts, hideTip, SERIES, OTHER } from './charts.js?v=9';
 
-const APP_VERSION = '1.3.2'; // Versión del panel; debe coincidir con version.json al desplegar.
+const APP_VERSION = '1.3.3'; // Versión del panel; debe coincidir con version.json al desplegar.
 const TZ = 'America/Merida';
 const OFFSET_H = 6; // Mérida: UTC-6 todo el año
 const $ = (s, el = document) => el.querySelector(s);
@@ -1073,6 +1073,7 @@ function systemCard(sys) {
       <div><dt>Copias en el servidor</dt><dd>${b?.local_copies ?? 0} (se guardan 30 días)</dd></div>
       <div><dt>Monitoreo</dt><dd><span class="pill ${sys.monitor ? 'ok' : 'warn'}">${sys.monitor ? 'Activo' : 'Sin configurar'}</span></dd></div>
       <div><dt>Base de datos</dt><dd>${sys.db_ok ? `Funcionando · ${(sys.db_size / 1048576).toFixed(1)} MB` : 'Sin conexión'}</dd></div>
+      ${sys.disk ? `<div><dt>Espacio libre</dt><dd><span class="pill ${sys.disk.free / sys.disk.total < 0.15 ? 'bad' : 'ok'}">${(sys.disk.free / 1073741824).toFixed(1)} GB de ${(sys.disk.total / 1073741824).toFixed(0)} GB</span></dd></div>` : ''}
       <div><dt>Encendido desde</dt><dd>${ago(new Date(Date.now() - sys.uptime_s * 1000).toISOString())}</dd></div>
     </dl>
     <p class="muted"><small>El respaldo se hace solo cada noche a las 2:30. Si el monitoreo está activo, te avisan cuando el sistema deja de responder.</small></p>

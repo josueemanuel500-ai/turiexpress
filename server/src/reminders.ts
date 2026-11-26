@@ -1,7 +1,8 @@
 import { pool } from './db.js';
 import { env } from './env.js';
 import { logEvent } from './common.js';
-import { purgeMedia, VEHICLE_COLUMNS, vehicleAlerts } from './operations.js';
+import { readFile, statfs } from 'node:fs/promises';
+import { BACKUP_STATUS, purgeMedia, VEHICLE_COLUMNS, vehicleAlerts } from './operations.js';
 import { notifyStaff } from './push.js';
 
 const TZ = 'America/Merida';
@@ -119,6 +120,28 @@ async function maintenanceAlerts(today: string, log: (m: string) => void) {
   await notifyStaff({ title: 'Mantenimiento de unidades', body: lines.slice(0, 4).join(' · ') + (lines.length > 4 ? ` · y ${lines.length - 4} más` : ''), url: '/#/ajustes', tag: `maint-${today}` }, log);
 }
 
+/** Una vez al día: avisa si el respaldo nocturno falló, no corrió, o si el disco se está llenando. */
+async function systemAlerts(today: string, log: (m: string) => void) {
+  const claim = await pool.query(
+    `INSERT INTO setting (key, value) VALUES ('last_system_alert', to_jsonb($1::text))
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()
+       WHERE setting.value IS DISTINCT FROM EXCLUDED.value
+     RETURNING key`, [today]);
+  if (!claim.rowCount) return;
+  const problems: string[] = [];
+  const backup = await readFile(BACKUP_STATUS, 'utf8').then(JSON.parse).catch(() => null);
+  if (!backup) problems.push('No hay registro de respaldos');
+  else if (!backup.ok) problems.push(backup.offsite === 'error' ? 'Falló la copia a Google Drive' : 'Falló el respaldo de la base de datos');
+  else if (Date.now() - new Date(backup.at).getTime() > 30 * 3600_000) problems.push('El respaldo nocturno no corrió');
+  const disk = await statfs('/').catch(() => null);
+  if (disk) {
+    const freePct = (disk.bavail / disk.blocks) * 100;
+    if (freePct < 15) problems.push(`Disco casi lleno (${Math.round(freePct)}% libre)`);
+  }
+  if (!problems.length) return;
+  await notifyStaff({ title: 'Revisar el servidor', body: problems.join(' · '), url: '/#/ajustes', tag: `system-${today}`, urgent: true }, log);
+}
+
 /** Señal de vida para el monitoreo externo: si deja de llegar, el servicio te avisa. */
 async function heartbeat() {
   if (!env.HEALTHCHECK_URL) return;
@@ -134,6 +157,7 @@ export function startReminders(log: (m: string) => void) {
       await perReservation(date, log);
       await expireHolds(date, log);
       if (hour >= DAILY_HOUR) await maintenanceAlerts(date, log);
+      if (hour >= DAILY_HOUR) await systemAlerts(date, log);
       await heartbeat();
       if (hour === 3) await purgeExpiredPersonalData(log);
     } catch (error) {
