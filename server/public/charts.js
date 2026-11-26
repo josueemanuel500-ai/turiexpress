@@ -3,7 +3,7 @@
 // Paleta categórica validada (colorblind-safe en pares adyacentes); el texto siempre en tinta, no en color de serie.
 export const SERIES = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4'];
 export const OTHER = '#9aa5a6';
-const INK = '#102426', MUTED = '#5a7274', GRID = '#e6eeee', AXIS = '#c9d6d6', SURFACE = '#ffffff';
+const INK = '#15171a', MUTED = '#6b7079', GRID = '#eceef1', AXIS = '#d3d6db', SURFACE = '#ffffff';
 
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const short = cents => {

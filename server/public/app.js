@@ -1,10 +1,10 @@
 // Panel de Turi Express. Sin dependencias ni compilación: módulos nativos del navegador.
 // La sesión vive en una cookie httpOnly (el JavaScript nunca ve el token).
 
-import { ic, hydrateIcons } from './icons.js?v=9';
-import { mountCharts, hideTip, SERIES, OTHER } from './charts.js?v=9';
+import { ic, hydrateIcons } from './icons.js?v=10';
+import { mountCharts, hideTip, SERIES, OTHER } from './charts.js?v=10';
 
-const APP_VERSION = '1.3.3'; // Versión del panel; debe coincidir con version.json al desplegar.
+const APP_VERSION = '1.4.0'; // Versión del panel; debe coincidir con version.json al desplegar.
 const TZ = 'America/Merida';
 const OFFSET_H = 6; // Mérida: UTC-6 todo el año
 const $ = (s, el = document) => el.querySelector(s);
@@ -660,7 +660,7 @@ function signatureModal() {
     const rect = canvas.getBoundingClientRect();
     canvas.width = rect.width * ratio; canvas.height = rect.height * ratio;
     ctx.scale(ratio, ratio);
-    ctx.lineWidth = 2.4; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#102426';
+    ctx.lineWidth = 2.4; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#15171a';
     let drawing = false, strokes = 0, last = null;
     const pos = e => { const b = canvas.getBoundingClientRect(); return [e.clientX - b.left, e.clientY - b.top]; };
     canvas.addEventListener('pointerdown', e => { drawing = true; last = pos(e); canvas.setPointerCapture(e.pointerId); card.querySelector('.sign-hint').hidden = true; });
