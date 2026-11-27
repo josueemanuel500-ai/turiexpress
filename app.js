@@ -46,6 +46,10 @@
     $('#calendar-title').textContent = title.charAt(0).toUpperCase() + title.slice(1);
     const grid = $('#calendar-days');
     grid.innerHTML = '';
+    // Los días aparecen con una entrada suave solo al cambiar de mes, no en cada clic.
+    const monthKey = `${y}-${m}`;
+    grid.classList.toggle('enter', grid.dataset.month !== monthKey);
+    grid.dataset.month = monthKey;
     const first = (new Date(y, m, 1).getDay() + 6) % 7, count = new Date(y, m + 1, 0).getDate();
     for (let i = 0; i < first; i++) grid.append(Object.assign(document.createElement('span'), { className: 'day blank' }));
     for (let n = 1; n <= count; n++) {
@@ -59,14 +63,35 @@
       if (state.start && state.end && date > state.start && date < state.end) b.classList.add('in-range');
       if (full) b.classList.add('full');
       if (d === iso(today)) b.classList.add('today');
+      b.dataset.d = d;
+      b.style.setProperty('--i', n);
       b.addEventListener('click', () => select(date));
+      b.addEventListener('mouseenter', () => preview(date));
       grid.append(b);
     }
+    renderHint();
     $('#previous-month').disabled = state.month <= new Date(today.getFullYear(), today.getMonth(), 1);
     $('#start-display').textContent = humanDate(state.start);
     $('#end-display').textContent = humanDate(state.end);
     renderEstimate();
     updateSubmit();
+  }
+
+  // Frase corta arriba del calendario que acompaña cada paso sin sonar a instrucciones.
+  function renderHint() {
+    const hint = $('#calendar-hint'), days = rentalDays();
+    const short = d => d.toLocaleDateString(locale, { day: 'numeric', month: 'short' });
+    hint.dataset.step = !state.start ? 'start' : !state.end ? 'end' : 'done';
+    hint.querySelector('span').textContent = !state.start ? t('¿Qué día sale tu grupo?', 'When does your group set off?')
+      : !state.end ? t(`Salida el ${short(state.start)} · ¿y el regreso?`, `Leaving ${short(state.start)} · and coming back?`)
+        : t(`${short(state.start)} – ${short(state.end)} · ${plural(days, 'día', 'días', 'day', 'days')} de viaje`, `${short(state.start)} – ${short(state.end)} · ${days}-day trip`);
+  }
+
+  // Al pasar el cursor después de elegir la salida, se ilumina el rango que quedaría.
+  function preview(date) {
+    const on = state.start && !state.end && date > state.start;
+    const s = state.start && iso(state.start), e = iso(date);
+    document.querySelectorAll('#calendar-days .day[data-d]').forEach(el => el.classList.toggle('preview', !!on && el.dataset.d > s && el.dataset.d < e));
   }
 
   const rentalDays = () => (state.start && state.end ? Math.max(1, Math.round((state.end - state.start) / 86400e3)) : 0);
@@ -126,6 +151,7 @@
 
   $('#previous-month').onclick = () => { state.month = new Date(state.month.getFullYear(), state.month.getMonth() - 1, 1); loadAvailability(); };
   $('#next-month').onclick = () => { state.month = new Date(state.month.getFullYear(), state.month.getMonth() + 1, 1); loadAvailability(); };
+  $('#calendar-days').addEventListener('mouseleave', () => document.querySelectorAll('#calendar-days .preview').forEach(el => el.classList.remove('preview')));
   $('#clear-dates').onclick = () => { state.start = null; state.end = null; $('#form-message').textContent = ''; render(); };
   $('#name').addEventListener('input', updateSubmit);
   $('#phone').addEventListener('input', updateSubmit);

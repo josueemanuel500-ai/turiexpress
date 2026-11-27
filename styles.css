@@ -368,3 +368,16 @@ h2 { font-size: clamp(24px, 3vw, 40px); }
   .hero-main > p { font-size: 16px; }
   .hero-main .spec-chips span { padding: 6px 12px; font-size: 13px; }
 }
+/* ───────── Calendario: frase de acompañamiento y vista previa del rango ───────── */
+.calendar-hint { display: flex; align-items: center; justify-content: center; gap: 9px; width: fit-content; margin: -4px auto 16px; padding: 7px 16px; border-radius: 999px; background: var(--plumbago-soft); color: var(--accent-hover); font-size: 14px; font-weight: 700; transition: background .25s, color .25s; }
+.calendar-hint i { position: relative; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+.calendar-hint[data-step="start"] i::after, .calendar-hint[data-step="end"] i::after { content: ''; position: absolute; inset: 0; border-radius: 50%; background: var(--accent); animation: hint-ping 1.8s ease-out infinite; }
+.calendar-hint[data-step="done"] { background: var(--accent); color: #fff; }
+.calendar-hint[data-step="done"] i { background: #fff; }
+@keyframes hint-ping { from { transform: scale(1); opacity: .55; } to { transform: scale(3); opacity: 0; } }
+.calendar-days.enter .day:not(:disabled):not(.blank) { animation: day-in .45s ease-out both; animation-delay: calc(var(--i, 0) * 12ms); }
+@keyframes day-in { from { opacity: 0; transform: translateY(4px); } }
+.day.preview { background: var(--plumbago-soft); color: var(--accent-hover); border-radius: 8px; }
+.day:hover:not(:disabled) { box-shadow: inset 0 0 0 2px var(--plumbago); }
+@media (max-width: 760px) { .calendar-hint { font-size: 13px; padding: 6px 13px; margin-bottom: 12px; } }
+@media (prefers-reduced-motion: reduce) { .calendar-hint i::after, .day { animation: none !important; } }

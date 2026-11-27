@@ -8,7 +8,7 @@ import { LEGAL } from './legal.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SITE = 'https://turiexpress.com.mx';
-const VERSION = '20261127b';
+const VERSION = '20261127d';
 const WA = '529995095005';
 const WA_DISPLAY = '+52 999 509 5005';
 const PANEL_URL = 'https://api.turiexpress.com.mx/';
@@ -89,6 +89,7 @@ function bookingBlock(x, lang) {
   return `<div class="booking">
       <div class="panel">
         <div class="calendar-top"><button id="previous-month" type="button" aria-label="${x('Mes anterior', 'Previous month')}">‹</button><h3 id="calendar-title"></h3><button id="next-month" type="button" aria-label="${x('Mes siguiente', 'Next month')}">›</button></div>
+        <p id="calendar-hint" class="calendar-hint" data-step="start" aria-live="polite"><i aria-hidden="true"></i><span></span></p>
         <div class="weekdays">${x(['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'], ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']).map(d => `<span>${d}</span>`).join('')}</div>
         <div id="calendar-days" class="calendar-days" aria-live="polite"></div>
         <div class="legend"><span><i class="dot-free"></i>${x('Disponible', 'Available')}</span><span><i class="dot-full"></i>${x('Ocupado', 'Booked')}</span><span><i class="dot-selected"></i>${x('Tu selección', 'Your dates')}</span></div>
