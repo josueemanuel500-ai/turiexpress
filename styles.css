@@ -276,3 +276,74 @@ input:focus { outline: none; background: #fff; border-color: var(--plumbago); bo
 @media (max-width: 560px) { .wa-float span { display: none; } .wa-float { width: 58px; padding: 0; justify-content: center; } }
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; scroll-behavior: auto !important; } }
+
+/* ───────── Escala compacta: laptops, tabletas y celulares ─────────
+   Títulos, textos y espacios se reducen de forma proporcional para que en pantallas chicas
+   no se vea "con zoom". */
+h1 { font-size: clamp(30px, 4.4vw, 60px); }
+h2 { font-size: clamp(24px, 3vw, 40px); }
+@media (max-width: 1280px) {
+  .hero-main { min-height: 540px; }
+  .section-head p, .hero-main > p, .page-hero p { font-size: 17px; }
+}
+@media (max-width: 760px) {
+  body { font-size: 15px; line-height: 1.55; }
+  h3 { font-size: 18px; }
+  :root { --radius: 22px; --radius-sm: 14px; }
+  .wrap { width: min(var(--wrap), 100% - 24px); }
+  .site-header { padding: 10px 0; }
+  .brand-mark { width: 34px; height: 34px; }
+  .section { padding-top: 48px; }
+  .section-head { gap: 10px; margin-bottom: 22px; }
+  .section-head p, .hero-main > p, .page-hero p, .legal .lead { font-size: 15.5px; }
+  .hero-main, .page-hero, .cta-band, .legal, .footer-card { border-radius: 26px; }
+  .hero-main { padding: 24px 20px 0; gap: 14px; }
+  .page-hero { padding: 28px 20px; gap: 12px; }
+  .hero-card, .hero-side { gap: 12px; }
+  .spec-chips span { padding: 6px 11px; font-size: 13px; }
+  .panel, .card { padding: 20px; }
+  .card { gap: 9px; }
+  .card .icon { width: 46px; height: 46px; border-radius: 14px; }
+  .photo-card .card-body { padding: 18px 20px 20px; }
+  .panel-head h2, .panel-head h3, .calendar-top h3 { font-size: 18px; }
+  .tile { padding: 13px; }
+  .tile strong { font-size: 14.5px; }
+  .tile svg { width: 21px; height: 21px; margin-bottom: 3px; }
+  .price-from { padding: 14px 16px; }
+  .price-from strong { font-size: 25px; }
+  .stats { margin-top: 12px; }
+  .stat { padding: 18px 20px; }
+  .stat strong { font-size: 30px; }
+  .grid-3, .grid-4 { gap: 12px; }
+  .btn { min-height: 48px; padding: 0 20px; font-size: 15px; }
+  .btn-sm { min-height: 40px; padding: 0 15px; font-size: 14px; }
+  input { min-height: 50px; padding: 0 15px; }
+  .calendar-top button { width: 40px; height: 40px; border-radius: 12px; }
+  .day { height: 40px; border-radius: 11px; font-size: 14px; }
+  .faq details { padding: 2px 18px; border-radius: 18px; }
+  .faq summary { font-size: 15.5px; padding: 15px 0; }
+  .faq summary::after { width: 30px; height: 30px; }
+  .cta-band { padding: 26px 22px; gap: 18px; }
+  .legal { padding: 26px 20px; }
+  .legal h1 { font-size: 27px; }
+  .legal h2 { font-size: 19px; margin-top: 28px; }
+  .contact-lines a, .contact-lines strong { font-size: 16px; }
+  .footer { margin-top: 48px; }
+  .footer-card { padding: 24px 20px; gap: 22px; }
+  .wa-float { width: 52px; height: 52px; right: 14px; bottom: 14px; }
+}
+@media (max-width: 400px) {
+  h1 { font-size: 27px; }
+  h2 { font-size: 22px; }
+  .tiles { gap: 8px; }
+  .day { height: 36px; border-radius: 10px; font-size: 13.5px; }
+}
+@media (max-width: 620px) {
+  /* Tarjetas cortas (requisitos, datos): dos por fila para no estirar la página. */
+  .grid-4 { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .grid-4 .card { padding: 16px; gap: 6px; }
+  .grid-4 .card .icon, .req .card strong.badge { width: 40px; min-width: 40px; height: 40px; border-radius: 12px; font-size: 15px; margin-bottom: 4px; }
+  .grid-4 .card .icon svg { width: 20px; height: 20px; }
+  .grid-4 h3 { font-size: 15.5px; }
+  .grid-4 .card p { font-size: 13.5px; }
+}

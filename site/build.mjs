@@ -8,7 +8,7 @@ import { LEGAL } from './legal.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SITE = 'https://turiexpress.com.mx';
-const VERSION = '20261126d';
+const VERSION = '20261127a';
 const WA = '529995095005';
 const WA_DISPLAY = '+52 999 509 5005';
 const PANEL_URL = 'https://api.turiexpress.com.mx/';
