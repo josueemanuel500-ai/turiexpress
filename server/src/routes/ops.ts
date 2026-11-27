@@ -6,6 +6,7 @@ import { buildContract } from '../contract.js';
 import { getSetting, pool, tx } from '../db.js';
 import { env } from '../env.js';
 import { billableDays, quote, seasonalQuote, type Pricing } from '../pricing.js';
+import { fxManualSchema, getFx, setManualRate } from '../fx.js';
 import { chargeInput, extrasSchema, getExtras, getSeasons, insertCharges, VEHICLE_COLUMNS, vehicleAlerts } from '../operations.js';
 import { notifyStaff, pushEnabled } from '../push.js';
 
@@ -106,9 +107,10 @@ export async function opsRoutes(app: FastifyInstance) {
       getSeasons(),
       getExtras(),
     ]);
+    const fx = await getFx();
     return {
       user: { id: req.staff!.id, name: req.staff!.full_name, email: req.staff!.email, role: req.staff!.role },
-      vehicles: vehicles.rows.map(v => ({ ...v, alerts: vehicleAlerts(v) })), pricing, business, seasons, extras,
+      vehicles: vehicles.rows.map(v => ({ ...v, alerts: vehicleAlerts(v) })), pricing, business, seasons, extras, fx,
       push: { enabled: pushEnabled, publicKey: env.VAPID_PUBLIC_KEY ?? null },
     };
   });
@@ -550,6 +552,11 @@ export async function opsRoutes(app: FastifyInstance) {
     );
     if (!rows[0]) return reply.code(404).send({ error: { message: 'Unidad no encontrada' } });
     return { vehicle: { ...rows[0], alerts: vehicleAlerts(rows[0]) } };
+  });
+
+  app.put('/v1/ops/settings/fx', { preHandler: requireAdmin }, async (req: any) => {
+    const { manual_rate } = fxManualSchema.parse(req.body);
+    return { fx: await setManualRate(manual_rate) };
   });
 
   app.put('/v1/ops/settings/:key', { preHandler: requireAdmin }, async (req: any) => {

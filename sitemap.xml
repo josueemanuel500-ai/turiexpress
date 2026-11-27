@@ -1,13 +1,83 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>https://turiexpress.com.mx/</loc></url>
-  <url><loc>https://turiexpress.com.mx/flota</loc></url>
-  <url><loc>https://turiexpress.com.mx/disponibilidad</loc></url>
-  <url><loc>https://turiexpress.com.mx/requisitos</loc></url>
-  <url><loc>https://turiexpress.com.mx/contacto</loc></url>
-  <url><loc>https://turiexpress.com.mx/renta-urvan-merida</loc></url>
-  <url><loc>https://turiexpress.com.mx/traslado-aeropuerto-merida</loc></url>
-  <url><loc>https://turiexpress.com.mx/renta-urvan-yucatan</loc></url>
-  <url><loc>https://turiexpress.com.mx/aviso-privacidad</loc></url>
-  <url><loc>https://turiexpress.com.mx/terminos</loc></url>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <url><loc>https://turiexpress.com.mx/</loc>
+    <xhtml:link rel="alternate" hreflang="es-MX" href="https://turiexpress.com.mx/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://turiexpress.com.mx/en/"/>
+  </url>
+  <url><loc>https://turiexpress.com.mx/en/</loc>
+    <xhtml:link rel="alternate" hreflang="es-MX" href="https://turiexpress.com.mx/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://turiexpress.com.mx/en/"/>
+  </url>
+  <url><loc>https://turiexpress.com.mx/flota</loc>
+    <xhtml:link rel="alternate" hreflang="es-MX" href="https://turiexpress.com.mx/flota"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://turiexpress.com.mx/en/fleet"/>
+  </url>
+  <url><loc>https://turiexpress.com.mx/en/fleet</loc>
+    <xhtml:link rel="alternate" hreflang="es-MX" href="https://turiexpress.com.mx/flota"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://turiexpress.com.mx/en/fleet"/>
+  </url>
+  <url><loc>https://turiexpress.com.mx/disponibilidad</loc>
+    <xhtml:link rel="alternate" hreflang="es-MX" href="https://turiexpress.com.mx/disponibilidad"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://turiexpress.com.mx/en/availability"/>
+  </url>
+  <url><loc>https://turiexpress.com.mx/en/availability</loc>
+    <xhtml:link rel="alternate" hreflang="es-MX" href="https://turiexpress.com.mx/disponibilidad"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://turiexpress.com.mx/en/availability"/>
+  </url>
+  <url><loc>https://turiexpress.com.mx/requisitos</loc>
+    <xhtml:link rel="alternate" hreflang="es-MX" href="https://turiexpress.com.mx/requisitos"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://turiexpress.com.mx/en/requirements"/>
+  </url>
+  <url><loc>https://turiexpress.com.mx/en/requirements</loc>
+    <xhtml:link rel="alternate" hreflang="es-MX" href="https://turiexpress.com.mx/requisitos"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://turiexpress.com.mx/en/requirements"/>
+  </url>
+  <url><loc>https://turiexpress.com.mx/contacto</loc>
+    <xhtml:link rel="alternate" hreflang="es-MX" href="https://turiexpress.com.mx/contacto"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://turiexpress.com.mx/en/contact"/>
+  </url>
+  <url><loc>https://turiexpress.com.mx/en/contact</loc>
+    <xhtml:link rel="alternate" hreflang="es-MX" href="https://turiexpress.com.mx/contacto"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://turiexpress.com.mx/en/contact"/>
+  </url>
+  <url><loc>https://turiexpress.com.mx/renta-urvan-merida</loc>
+    <xhtml:link rel="alternate" hreflang="es-MX" href="https://turiexpress.com.mx/renta-urvan-merida"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://turiexpress.com.mx/en/van-rental-merida"/>
+  </url>
+  <url><loc>https://turiexpress.com.mx/en/van-rental-merida</loc>
+    <xhtml:link rel="alternate" hreflang="es-MX" href="https://turiexpress.com.mx/renta-urvan-merida"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://turiexpress.com.mx/en/van-rental-merida"/>
+  </url>
+  <url><loc>https://turiexpress.com.mx/renta-urvan-yucatan</loc>
+    <xhtml:link rel="alternate" hreflang="es-MX" href="https://turiexpress.com.mx/renta-urvan-yucatan"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://turiexpress.com.mx/en/van-rental-yucatan"/>
+  </url>
+  <url><loc>https://turiexpress.com.mx/en/van-rental-yucatan</loc>
+    <xhtml:link rel="alternate" hreflang="es-MX" href="https://turiexpress.com.mx/renta-urvan-yucatan"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://turiexpress.com.mx/en/van-rental-yucatan"/>
+  </url>
+  <url><loc>https://turiexpress.com.mx/traslado-aeropuerto-merida</loc>
+    <xhtml:link rel="alternate" hreflang="es-MX" href="https://turiexpress.com.mx/traslado-aeropuerto-merida"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://turiexpress.com.mx/en/merida-airport-transfer"/>
+  </url>
+  <url><loc>https://turiexpress.com.mx/en/merida-airport-transfer</loc>
+    <xhtml:link rel="alternate" hreflang="es-MX" href="https://turiexpress.com.mx/traslado-aeropuerto-merida"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://turiexpress.com.mx/en/merida-airport-transfer"/>
+  </url>
+  <url><loc>https://turiexpress.com.mx/terminos</loc>
+    <xhtml:link rel="alternate" hreflang="es-MX" href="https://turiexpress.com.mx/terminos"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://turiexpress.com.mx/en/terms"/>
+  </url>
+  <url><loc>https://turiexpress.com.mx/en/terms</loc>
+    <xhtml:link rel="alternate" hreflang="es-MX" href="https://turiexpress.com.mx/terminos"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://turiexpress.com.mx/en/terms"/>
+  </url>
+  <url><loc>https://turiexpress.com.mx/aviso-privacidad</loc>
+    <xhtml:link rel="alternate" hreflang="es-MX" href="https://turiexpress.com.mx/aviso-privacidad"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://turiexpress.com.mx/en/privacy"/>
+  </url>
+  <url><loc>https://turiexpress.com.mx/en/privacy</loc>
+    <xhtml:link rel="alternate" hreflang="es-MX" href="https://turiexpress.com.mx/aviso-privacidad"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://turiexpress.com.mx/en/privacy"/>
+  </url>
 </urlset>

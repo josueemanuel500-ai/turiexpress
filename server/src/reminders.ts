@@ -4,6 +4,7 @@ import { logEvent } from './common.js';
 import { readFile, statfs } from 'node:fs/promises';
 import { BACKUP_STATUS, purgeMedia, VEHICLE_COLUMNS, vehicleAlerts } from './operations.js';
 import { notifyStaff } from './push.js';
+import { refreshFx } from './fx.js';
 
 const TZ = 'America/Merida';
 const DAILY_HOUR = 8; // resumen diario a las 8:00 de Mérida
@@ -159,6 +160,7 @@ export function startReminders(log: (m: string) => void) {
       if (hour >= DAILY_HOUR) await maintenanceAlerts(date, log);
       if (hour >= DAILY_HOUR) await systemAlerts(date, log);
       await heartbeat();
+      await refreshFx(log);
       if (hour === 3) await purgeExpiredPersonalData(log);
     } catch (error) {
       log(`recordatorios: ${(error as Error).message}`);

@@ -1,10 +1,10 @@
 // Panel de Turi Express. Sin dependencias ni compilación: módulos nativos del navegador.
 // La sesión vive en una cookie httpOnly (el JavaScript nunca ve el token).
 
-import { ic, hydrateIcons } from './icons.js?v=10';
-import { mountCharts, hideTip, SERIES, OTHER } from './charts.js?v=10';
+import { ic, hydrateIcons } from './icons.js?v=11';
+import { mountCharts, hideTip, SERIES, OTHER } from './charts.js?v=11';
 
-const APP_VERSION = '1.4.0'; // Versión del panel; debe coincidir con version.json al desplegar.
+const APP_VERSION = '1.4.1'; // Versión del panel; debe coincidir con version.json al desplegar.
 const TZ = 'America/Merida';
 const OFFSET_H = 6; // Mérida: UTC-6 todo el año
 const $ = (s, el = document) => el.querySelector(s);
@@ -124,7 +124,7 @@ start();
 async function start() {
   try {
     const boot = await api('/ops/bootstrap');
-    Object.assign(state, { me: boot.user, vehicles: boot.vehicles, pricing: boot.pricing, business: boot.business, push: boot.push, seasons: boot.seasons ?? [], extras: boot.extras ?? {} });
+    Object.assign(state, { me: boot.user, vehicles: boot.vehicles, pricing: boot.pricing, business: boot.business, push: boot.push, seasons: boot.seasons ?? [], extras: boot.extras ?? {}, fx: boot.fx ?? {} });
   } catch (error) {
     if (!error.expired) { $('#boot').innerHTML = `<p class="empty">No se pudo conectar con el servidor.<br><button class="btn" data-action="reload">Reintentar</button></p>`; }
     return;
@@ -1103,6 +1103,13 @@ views.ajustes = {
         <p class="muted"><small>Tarifa normal para la web y las rentas nuevas. Las rentas ya creadas conservan su precio.</small></p>
         <p class="form-error" hidden></p><div><button class="btn primary" type="submit">Guardar tarifas</button></div>
       </form>
+      <form id="fx" class="card section stack">
+        <h2 class="with-ic">${ic('globe')}Dólares en la página web</h2>
+        <p class="muted" style="margin:0"><small>La web muestra el precio aproximado en dólares junto al de pesos. El cobro siempre es en pesos.
+          ${state.fx?.auto_rate ? `Tipo de cambio automático: <strong>$${state.fx.auto_rate.toFixed(2)}</strong> por dólar${state.fx.auto_date ? ` (${fmtD(state.fx.auto_date)})` : ''}.` : 'El tipo de cambio automático se obtiene en unos minutos.'}</small></p>
+        <label>Tipo de cambio fijo (opcional)<input name="manual_rate" type="number" min="5" max="100" step="0.01" inputmode="decimal" placeholder="Vacío = automático" value="${state.fx?.manual_rate ?? ''}"></label>
+        <p class="form-error" hidden></p><div><button class="btn primary" type="submit">Guardar</button></div>
+      </form>
       <div class="card section stack">
         <div class="row between"><h2 class="with-ic">${ic('sun')}Temporadas</h2><button class="btn sm primary" data-action="season-new">${ic('plus')}Agregar</button></div>
         <p class="muted" style="margin:0"><small>En estas fechas se cobra la tarifa de la temporada en lugar de la normal (web y panel).</small></p>
@@ -1171,6 +1178,12 @@ views.ajustes = {
     if (pricing) onSubmit(pricing, async d => {
       const res = await api('/ops/settings/pricing', { method: 'PUT', body: { daily_cents: toCents(d.daily), weekly_cents: toCents(d.weekly), deposit_cents: toCents(d.deposit) } });
       state.pricing = res.pricing; toast('Tarifas guardadas');
+    });
+    const fxForm = $('#fx', el);
+    if (fxForm) onSubmit(fxForm, async d => {
+      const v = String(d.manual_rate ?? '').trim();
+      const res = await api('/ops/settings/fx', { method: 'PUT', body: { manual_rate: v ? Number(v) : null } });
+      state.fx = res.fx; toast(v ? 'Tipo de cambio fijo guardado' : 'Se usará el tipo de cambio automático');
     });
     const extras = $('#extras', el);
     if (extras) onSubmit(extras, async d => {

@@ -5,6 +5,7 @@ import { getSetting, pool, tx } from '../db.js';
 import { seasonalQuote, type Pricing } from '../pricing.js';
 import { getExtras, getSeasons } from '../operations.js';
 import { notifyStaff } from '../push.js';
+import { usdRate } from '../fx.js';
 
 const DEFAULT_PRICING: Pricing = { daily_cents: 0, weekly_cents: 0, deposit_cents: 0 };
 
@@ -16,15 +17,15 @@ export async function publicRoutes(app: FastifyInstance) {
     const q = z.object({ start_date: dateSchema, end_date: dateSchema, start_time: z.string().regex(/^\d{2}:\d{2}$/).default('09:00') }).parse(req.query);
     const startsAt = new Date(`${q.start_date}T${q.start_time}:00${BUSINESS_OFFSET}`);
     const endsAt = new Date(`${q.end_date}T${q.start_time}:00${BUSINESS_OFFSET}`);
-    if (endsAt <= startsAt) return { days: 0, total_cents: 0, seasons: [] };
+    if (endsAt <= startsAt) return { days: 0, total_cents: 0, seasons: [], usd_rate: null };
     const pricing = await getSetting('pricing', DEFAULT_PRICING);
     const r = seasonalQuote(startsAt, endsAt, pricing, await getSeasons());
-    return { days: r.days, total_cents: r.total_cents, seasons: r.seasons, deposit_cents: pricing.deposit_cents };
+    return { days: r.days, total_cents: r.total_cents, seasons: r.seasons, deposit_cents: pricing.deposit_cents, usd_rate: await usdRate() };
   });
 
   app.get('/v1/public/pricing', async () => {
     const p = await getSetting('pricing', DEFAULT_PRICING);
-    return { daily_cents: p.daily_cents, weekly_cents: p.weekly_cents, deposit_cents: p.deposit_cents };
+    return { daily_cents: p.daily_cents, weekly_cents: p.weekly_cents, deposit_cents: p.deposit_cents, usd_rate: await usdRate() };
   });
 
   /** Ocupación pública: solo rangos de fechas por unidad, nunca datos del cliente. */
