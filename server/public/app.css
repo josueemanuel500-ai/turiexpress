@@ -458,3 +458,16 @@ legend { border-bottom-color: var(--line); }
   .nav a.active .ic { background: none; color: var(--teal); }
   .view { padding: 32px 40px 56px; }
 }
+
+/* ───────── Reportes, cupones y clientes bloqueados ───────── */
+.banner.bad-banner { background: var(--bad-bg, #fdecec); color: var(--bad, #b3261e); }
+.banner.bad-banner a { color: inherit; }
+.ok-text { color: var(--ok, #1f8a55); font-weight: 650; margin: 0; }
+.coupon-code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .04em; background: var(--tile, #f1f3f6); padding: 2px 8px; border-radius: 8px; }
+.data .meter { margin-top: 4px; min-width: 60px; }
+.bars-chart svg { display: block; width: 100%; }
+
+/* Logo en el panel */
+img.logo-dot { background: none !important; border-radius: 0 !important; object-fit: contain; }
+img.login-logo { background: none !important; box-shadow: none !important; border-radius: 0 !important; width: 64px; height: 64px; object-fit: contain; }
+.item-title { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }

@@ -11,11 +11,11 @@
   <link rel="alternate" hreflang="es-MX" href="https://turiexpress.com.mx/disponibilidad">
   <link rel="alternate" hreflang="en" href="https://turiexpress.com.mx/en/availability">
   <link rel="alternate" hreflang="x-default" href="https://turiexpress.com.mx/disponibilidad">
-  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="/favicon-48.png" sizes="48x48" type="image/png">
   <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <link rel="preload" href="/fonts/manrope-latin.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="/styles.css?v=20261127d">
+  <link rel="stylesheet" href="/styles.css?v=20261127f">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Turi Express MX">
   <meta property="og:title" content="Availability | TURI EXPRESS MX">
@@ -30,7 +30,7 @@
 <body data-lang="en" data-page="availability">
   <a class="sr-only" href="#main">Skip to content</a>
   <header class="site-header"><div class="wrap header-row">
-    <a class="brand" href="/en/"><span class="brand-mark"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 16V8a2 2 0 0 1 2-2h10l5 5v5a1 1 0 0 1-1 1h-1"/><path d="M3 16a1 1 0 0 0 1 1h1"/><path d="M9 17h6"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/><path d="M15 6v5h5"/><path d="M3 11h12"/></svg></span><span>TURI EXPRESS <small>MX</small></span></a>
+    <a class="brand" href="/en/"><img class="brand-mark" src="/logo-icono.png" width="40" height="40" alt=""><span>TURI EXPRESS <small>MX</small></span></a>
     <nav class="nav" aria-label="Main navigation"><a href="/en/">Home</a><a href="/en/fleet">Fleet</a><a href="/en/availability" aria-current="page">Availability</a><a href="/en/requirements">Requirements</a><a href="/en/contact">Contact</a></nav>
     <div class="header-tools">
       <nav class="lang" aria-label="Language">
@@ -63,6 +63,10 @@
         <button id="clear-dates" class="text-link" type="button">Choose again</button>
         <label>Your name<input id="name" name="name" autocomplete="name" placeholder="e.g. John Smith" required></label>
         <label>Your phone (WhatsApp)<input id="phone" name="phone" autocomplete="tel" inputmode="tel" placeholder="e.g. +1 555 123 4567" required></label>
+        <details class="coupon-box" id="coupon-box"><summary>Have a coupon?</summary>
+          <div class="coupon-row"><input id="coupon" name="coupon" maxlength="20" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Code" aria-label="Coupon code">
+          <button class="btn btn-soft btn-sm" type="button" id="apply-coupon">Apply</button></div>
+          <p id="coupon-message" class="coupon-message" aria-live="polite"></p></details>
         <div id="price-estimate" class="price-estimate" hidden></div>
         <input type="text" name="website" id="website" class="hp-field" tabindex="-1" autocomplete="off" aria-hidden="true">
         <p id="form-message" class="form-message" role="alert"></p>
@@ -75,7 +79,7 @@
 
   <footer class="footer"><div class="wrap">
     <div class="footer-card">
-      <div><a class="brand" href="/en/"><span class="brand-mark"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 16V8a2 2 0 0 1 2-2h10l5 5v5a1 1 0 0 1-1 1h-1"/><path d="M3 16a1 1 0 0 0 1 1h1"/><path d="M9 17h6"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/><path d="M15 6v5h5"/><path d="M3 11h12"/></svg></span><span>TURI EXPRESS <small>MX</small></span></a>
+      <div><a class="footer-logo" href="/en/"><img src="/logo-turi.webp" width="220" height="117" alt="Turi Express MX" loading="lazy"></a>
         <p>Nissan Urvan rental for groups and transfers in Mérida, Yucatán.</p></div>
       <div><h3>Site</h3><ul><li><a href="/en/">Home</a></li><li><a href="/en/fleet">Fleet</a></li><li><a href="/en/availability">Availability</a></li><li><a href="/en/requirements">Requirements</a></li><li><a href="/en/contact">Contact</a></li></ul></div>
       <div><h3>Services</h3><ul>
@@ -93,6 +97,6 @@
   </div></footer>
 
   <a class="wa-float" href="https://wa.me/529995095005?text=Hi%2C%20I'm%20on%20the%20%22Availability%22%20page.%20I'd%20like%20information%20about%20renting%20a%20Nissan%20Urvan." target="_blank" rel="noopener" aria-label="Message us on WhatsApp"><svg viewBox="0 0 32 32" aria-hidden="true"><path fill="currentColor" d="M16 3a13 13 0 0 0-11.2 19.6L3 29l6.6-1.7A13 13 0 1 0 16 3zm0 23.6a10.6 10.6 0 0 1-5.4-1.5l-.4-.2-3.9 1 1-3.8-.2-.4A10.6 10.6 0 1 1 16 26.6zm5.8-7.9c-.3-.2-1.9-.9-2.2-1s-.5-.2-.7.2-.8 1-1 1.2-.4.2-.7 0a8.7 8.7 0 0 1-4.3-3.8c-.3-.6.3-.5.9-1.7.1-.2 0-.4 0-.6l-1-2.4c-.3-.6-.5-.5-.7-.5h-.6a1.2 1.2 0 0 0-.9.4 3.6 3.6 0 0 0-1.1 2.7 6.3 6.3 0 0 0 1.3 3.3 14.4 14.4 0 0 0 5.5 4.9c2 .9 2.8.9 3.8.8a3.3 3.3 0 0 0 2.1-1.5 2.7 2.7 0 0 0 .2-1.5c-.1-.2-.3-.3-.6-.4z"/></svg><span>Chat with us</span></a>
-  <script src="/site.js?v=20261127d" defer></script><script src="/app.js?v=20261127d" defer></script>
+  <script src="/site.js?v=20261127f" defer></script><script src="/app.js?v=20261127f" defer></script>
 </body>
 </html>

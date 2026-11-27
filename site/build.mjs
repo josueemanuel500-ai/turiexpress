@@ -8,7 +8,7 @@ import { LEGAL } from './legal.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SITE = 'https://turiexpress.com.mx';
-const VERSION = '20261127d';
+const VERSION = '20261127f';
 const WA = '529995095005';
 const WA_DISPLAY = '+52 999 509 5005';
 const PANEL_URL = 'https://api.turiexpress.com.mx/';
@@ -100,6 +100,10 @@ function bookingBlock(x, lang) {
         <button id="clear-dates" class="text-link" type="button">${x('Elegir de nuevo', 'Choose again')}</button>
         <label>${x('Tu nombre', 'Your name')}<input id="name" name="name" autocomplete="name" placeholder="${x('Ej. Juan Pérez', 'e.g. John Smith')}" required></label>
         <label>${x('Tu teléfono (WhatsApp)', 'Your phone (WhatsApp)')}<input id="phone" name="phone" autocomplete="tel" inputmode="tel" placeholder="${x('Ej. 999 123 4567', 'e.g. +1 555 123 4567')}" required></label>
+        <details class="coupon-box" id="coupon-box"><summary>${x('¿Tienes un cupón?', 'Have a coupon?')}</summary>
+          <div class="coupon-row"><input id="coupon" name="coupon" maxlength="20" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="${x('Código', 'Code')}" aria-label="${x('Código de cupón', 'Coupon code')}">
+          <button class="btn btn-soft btn-sm" type="button" id="apply-coupon">${x('Aplicar', 'Apply')}</button></div>
+          <p id="coupon-message" class="coupon-message" aria-live="polite"></p></details>
         <div id="price-estimate" class="price-estimate" hidden></div>
         <input type="text" name="website" id="website" class="hp-field" tabindex="-1" autocomplete="off" aria-hidden="true">
         <p id="form-message" class="form-message" role="alert"></p>
@@ -391,7 +395,7 @@ function layout(page, lang) {
   <link rel="alternate" hreflang="es-MX" href="${SITE + urlOf(page.id, 'es')}">
   <link rel="alternate" hreflang="en" href="${SITE + urlOf(page.id, 'en')}">
   <link rel="alternate" hreflang="x-default" href="${SITE + urlOf(page.id, 'es')}">
-  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="/favicon-48.png" sizes="48x48" type="image/png">
   <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <link rel="preload" href="/fonts/manrope-latin.woff2" as="font" type="font/woff2" crossorigin>
@@ -410,7 +414,7 @@ function layout(page, lang) {
 <body data-lang="${lang}" data-page="${page.id}">
   <a class="sr-only" href="#main">${x('Ir al contenido', 'Skip to content')}</a>
   <header class="site-header"><div class="wrap header-row">
-    <a class="brand" href="${urlOf('home', lang)}"><span class="brand-mark">${icon('van')}</span><span>TURI EXPRESS <small>MX</small></span></a>
+    <a class="brand" href="${urlOf('home', lang)}"><img class="brand-mark" src="/logo-icono.png" width="40" height="40" alt=""><span>TURI EXPRESS <small>MX</small></span></a>
     <nav class="nav" aria-label="${x('Navegación principal', 'Main navigation')}">${navLinks}</nav>
     <div class="header-tools">
       ${langSwitch}
@@ -429,7 +433,7 @@ ${c.body(x, lang)}
 
   <footer class="footer"><div class="wrap">
     <div class="footer-card">
-      <div><a class="brand" href="${urlOf('home', lang)}"><span class="brand-mark">${icon('van')}</span><span>TURI EXPRESS <small>MX</small></span></a>
+      <div><a class="footer-logo" href="${urlOf('home', lang)}"><img src="/logo-turi.webp" width="220" height="117" alt="Turi Express MX" loading="lazy"></a>
         <p>${x('Renta de Nissan Urvan para grupos y traslados en Mérida, Yucatán.', 'Nissan Urvan rental for groups and transfers in Mérida, Yucatán.')}</p></div>
       <div><h3>${x('Sitio', 'Site')}</h3><ul>${NAV.map(id => `<li><a href="${urlOf(id, lang)}">${x(...NAV_LABEL[id])}</a></li>`).join('')}</ul></div>
       <div><h3>${x('Servicios', 'Services')}</h3><ul>

@@ -66,16 +66,16 @@ export async function upsertClient(
 }
 
 /** Unidades activas sin reserva bloqueante en el rango [desde, hasta). */
-export async function freeVehicles(db: Tx | typeof pool, startsAt: string, endsAt: string, exceptReservation?: string) {
+export async function freeVehicles(db: Tx | typeof pool, startsAt: string, endsAt: string, exceptReservation?: string, websiteOnly = false) {
   const { rows } = await db.query(
     `SELECT v.id, v.code, v.name FROM vehicle v
-      WHERE v.active AND NOT EXISTS (
+      WHERE v.active AND (NOT $5::boolean OR v.on_website) AND NOT EXISTS (
         SELECT 1 FROM reservation r WHERE r.vehicle_id=v.id
           AND r.status = ANY($3::reservation_status[])
           AND tstzrange(r.starts_at, r.ends_at, '[)') && tstzrange($1::timestamptz, $2::timestamptz, '[)')
           AND ($4::uuid IS NULL OR r.id <> $4::uuid))
       ORDER BY v.code`,
-    [startsAt, endsAt, BLOCKING, exceptReservation ?? null],
+    [startsAt, endsAt, BLOCKING, exceptReservation ?? null, websiteOnly],
   );
   return rows as { id: string; code: string; name: string }[];
 }

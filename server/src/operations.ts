@@ -77,7 +77,7 @@ export function vehicleAlerts(v: any): VehicleAlert[] {
 export const VEHICLE_COLUMNS = `id, code, name, plate, capacity, model_year, color, odometer_km, active, notes,
   to_char(insurance_expires,'YYYY-MM-DD') AS insurance_expires, to_char(verification_expires,'YYYY-MM-DD') AS verification_expires,
   to_char(permit_expires,'YYYY-MM-DD') AS permit_expires, service_every_km, service_every_months, last_service_km,
-  to_char(last_service_on,'YYYY-MM-DD') AS last_service_on`;
+  to_char(last_service_on,'YYYY-MM-DD') AS last_service_on, vehicle_type, daily_rate_cents, weekly_rate_cents, on_website, gps_url`;
 
 // ───────────────────────── Archivos (fotos) ─────────────────────────
 function decodeImage(dataUrl: string, mime: 'image/jpeg' | 'image/png') {

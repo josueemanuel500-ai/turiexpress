@@ -13,15 +13,15 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/icons/icon-192.png" type="image/png">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="/app.css?v=11">
-  <script src="/app.js?v=11" type="module"></script>
+  <link rel="stylesheet" href="/app.css?v=12">
+  <script src="/app.js?v=12" type="module"></script>
 </head>
 <body>
   <div id="boot" class="boot"><div class="spinner"></div></div>
 
   <section id="login" class="login" hidden>
     <form id="login-form" class="login-card" novalidate>
-      <div class="login-logo">TE</div>
+      <img class="login-logo" src="/logo-icono.png" width="64" height="64" alt="Turi Express">
       <h1>Panel Turi Express</h1>
       <p class="muted">Acceso solo para personal autorizado.</p>
       <label>Correo<input name="email" type="email" autocomplete="username" required inputmode="email"></label>
@@ -36,7 +36,7 @@
 
   <div id="app" class="shell" hidden>
     <aside class="sidebar">
-      <div class="side-brand"><span class="logo-dot">TE</span><div><strong>Turi Express</strong><small id="me-name"></small></div></div>
+      <div class="side-brand"><img class="logo-dot" src="/logo-icono.png" width="38" height="38" alt=""><div><strong>Turi Express</strong><small id="me-name"></small></div></div>
       <nav class="nav" id="nav">
         <a href="#/inicio" data-nav="inicio"><i data-icon="home"></i><span>Inicio</span></a>
         <a href="#/reservas" data-nav="reservas"><i data-icon="list"></i><span>Rentas</span><b class="badge" id="pending-badge" hidden></b></a>

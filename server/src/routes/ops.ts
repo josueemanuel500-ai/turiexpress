@@ -9,6 +9,7 @@ import { billableDays, quote, seasonalQuote, type Pricing } from '../pricing.js'
 import { fxManualSchema, getFx, setManualRate } from '../fx.js';
 import { chargeInput, extrasSchema, getExtras, getSeasons, insertCharges, VEHICLE_COLUMNS, vehicleAlerts } from '../operations.js';
 import { notifyStaff, pushEnabled } from '../push.js';
+import { blockedMatches, checkCoupon, couponInput, listCoupons, yearReport } from '../growth.js';
 
 const TZ = 'America/Merida';
 const STATUSES = ['new', 'quoted', 'hold', 'deposit_pending', 'confirmed', 'assigned', 'in_service', 'completed', 'cancelled', 'no_show'] as const;
@@ -22,9 +23,10 @@ const RESERVATION_SELECT = `
          COALESCE(p.paid, 0) AS paid_cents,
          COALESCE(ch.total, 0) AS charges_cents,
          COALESCE(r.quote_cents, 0) + COALESCE(ch.total, 0) - COALESCE(p.paid, 0) AS balance_cents,
-         sg.signed_name, sg.signed_at
+         sg.signed_name, sg.signed_at, cp.code AS coupon_code
     FROM reservation r
     LEFT JOIN vehicle v ON v.id = r.vehicle_id
+    LEFT JOIN coupon cp ON cp.id = r.coupon_id
     LEFT JOIN reservation_signature sg ON sg.reservation_id = r.id
     LEFT JOIN LATERAL (
       SELECT SUM(CASE WHEN kind = 'refund' THEN -amount_cents ELSE amount_cents END) AS paid
@@ -57,6 +59,7 @@ const reservationInput = z.object({
   guarantee_cents: cents.optional(),
   // auto = tarifas y temporadas vigentes · rates = tarifa personalizada · manual = total acordado
   price_mode: z.enum(['auto', 'rates', 'manual']).optional(),
+  coupon_code: z.string().trim().max(20).nullish().transform(v => v ? v.toUpperCase() : null),
 });
 
 type ReservationInput = z.infer<typeof reservationInput>;
@@ -74,9 +77,20 @@ function conflict(error: any) {
 }
 
 /** Precio de una renta según su modo: temporadas (auto), tarifa fija (rates) o total acordado (manual). */
-async function priceFor(i: { starts_at: string; ends_at: string; discount_cents: number; daily_rate_cents?: number; weekly_rate_cents?: number; quote_cents?: number | null; price_mode?: string }) {
+async function priceFor(i: { starts_at: string; ends_at: string; discount_cents: number; daily_rate_cents?: number; weekly_rate_cents?: number; quote_cents?: number | null; price_mode?: string; vehicle_id?: string | null }) {
   const mode = i.price_mode ?? (i.quote_cents != null ? 'manual' : i.daily_rate_cents != null ? 'rates' : 'auto');
-  const pricing = await getSetting('pricing', DEFAULT_PRICING);
+  let pricing = await getSetting('pricing', DEFAULT_PRICING);
+  // Una unidad con tarifa propia (otro tipo de vehículo) cobra esa tarifa, sin temporadas.
+  const own = i.vehicle_id
+    ? (await pool.query('SELECT daily_rate_cents, weekly_rate_cents FROM vehicle WHERE id=$1', [i.vehicle_id])).rows[0]
+    : null;
+  if (own?.daily_rate_cents != null) {
+    pricing = { ...pricing, daily_cents: own.daily_rate_cents, weekly_cents: own.weekly_rate_cents ?? own.daily_rate_cents * 7 };
+    if (mode === 'auto') {
+      const q = computeTotal({ ...i, daily_rate_cents: pricing.daily_cents, weekly_rate_cents: pricing.weekly_cents });
+      return { mode, ...q, seasons: [] as string[], daily_cents: pricing.daily_cents, weekly_cents: pricing.weekly_cents };
+    }
+  }
   if (mode === 'auto') {
     const q = seasonalQuote(new Date(i.starts_at), new Date(i.ends_at), pricing, await getSeasons());
     return { mode, ...q, total_cents: Math.max(0, q.total_cents - i.discount_cents) };
@@ -86,6 +100,8 @@ async function priceFor(i: { starts_at: string; ends_at: string; discount_cents:
   return { mode, ...q, seasons: [] as string[], daily_cents: daily, weekly_cents: weekly,
     total_cents: mode === 'manual' && i.quote_cents != null ? i.quote_cents : q.total_cents };
 }
+
+class HttpError extends Error { constructor(public status: number, message: string) { super(message); } }
 
 async function loadReservation(id: string) {
   const { rows } = await pool.query(`${RESERVATION_SELECT} WHERE r.id = $1`, [id]);
@@ -117,14 +133,14 @@ export async function opsRoutes(app: FastifyInstance) {
 
   app.get('/v1/ops/quote', async req => {
     const q = z.object({
-      starts_at: isoDateTime, ends_at: isoDateTime, exclude: uuid.optional(),
+      starts_at: isoDateTime, ends_at: isoDateTime, exclude: uuid.optional(), vehicle_id: uuid.optional(),
       daily_rate_cents: z.coerce.number().int().min(0).optional(),
       weekly_rate_cents: z.coerce.number().int().min(0).optional(),
       discount_cents: z.coerce.number().int().min(0).default(0),
     }).parse(req.query);
     const total = await priceFor({
       starts_at: q.starts_at, ends_at: q.ends_at, discount_cents: q.discount_cents,
-      daily_rate_cents: q.daily_rate_cents, weekly_rate_cents: q.weekly_rate_cents,
+      daily_rate_cents: q.daily_rate_cents, weekly_rate_cents: q.weekly_rate_cents, vehicle_id: q.vehicle_id,
     });
     const free = new Date(q.ends_at) > new Date(q.starts_at) ? await freeVehicles(pool, q.starts_at, q.ends_at, q.exclude) : [];
     return { ...total, free_vehicle_ids: free.map(v => v.id) };
@@ -277,11 +293,23 @@ export async function opsRoutes(app: FastifyInstance) {
       pool.query('SELECT id, kind, description, amount_cents, created_at FROM charge WHERE reservation_id=$1 ORDER BY created_at', [id]),
       pool.query('SELECT id, stage, slot, created_at FROM inspection_photo WHERE reservation_id=$1 ORDER BY created_at', [id]),
     ]);
-    return { reservation, payments: payments.rows, events: events.rows, client: client.rows[0] ?? null, charges: charges.rows, photos: photos.rows };
+    const c = client.rows[0] ?? null;
+    return { reservation, payments: payments.rows, events: events.rows, client: c, charges: charges.rows, photos: photos.rows,
+      blocked_matches: c ? await blockedMatches(c) : [] };
   });
 
   async function saveReservation(staffId: string, input: ReservationInput, id?: string) {
     const pricing = await getSetting('pricing', DEFAULT_PRICING);
+    let couponId: string | null = null;
+    if (input.coupon_code) {
+      // El cupón sustituye al descuento manual y no aplica a un total acordado a mano.
+      if (input.price_mode === 'manual') throw new HttpError(422, 'El cupón no aplica cuando el total es acordado a mano');
+      const base = await priceFor({ ...input, discount_cents: 0 });
+      const c = await checkCoupon(pool, input.coupon_code, { days: base.days, total_cents: base.total_cents, channel: 'staff', exceptReservation: id });
+      if (!c.ok) throw new HttpError(422, c.message);
+      couponId = c.coupon.id;
+      input = { ...input, discount_cents: c.discount_cents };
+    }
     const price = await priceFor(input);
     const daily = price.daily_cents, weekly = price.weekly_cents;
     const total = price.total_cents;
@@ -290,15 +318,15 @@ export async function opsRoutes(app: FastifyInstance) {
       const values = [
         input.status, input.starts_at, input.ends_at, input.pickup ?? 'Oficina', input.destination, input.client.full_name,
         input.client.phone, input.client.email, input.notes, client.id, input.vehicle_id, daily, weekly,
-        input.discount_cents, total, input.guarantee_cents ?? pricing.deposit_cents, staffId, price.mode,
+        input.discount_cents, total, input.guarantee_cents ?? pricing.deposit_cents, staffId, price.mode, couponId,
       ];
       if (id) {
         const { rows } = await db.query(
           `UPDATE reservation SET status=$1, starts_at=$2, ends_at=$3, pickup=$4, destination=$5, client_name=$6,
              client_phone=$7, client_email=$8, notes=$9, client_id=$10, vehicle_id=$11, daily_rate_cents=$12,
              weekly_rate_cents=$13, discount_cents=$14, quote_cents=$15, guarantee_cents=$16, updated_by=$17, updated_at=now(),
-             price_mode=$18, hold_until = CASE WHEN $1::reservation_status = 'hold' THEN hold_until ELSE NULL END
-           WHERE id=$19 RETURNING id`, [...values, id]);
+             price_mode=$18, coupon_id=$19, hold_until = CASE WHEN $1::reservation_status = 'hold' THEN hold_until ELSE NULL END
+           WHERE id=$20 RETURNING id`, [...values, id]);
         if (!rows[0]) return null;
         await logEvent(db, id, staffId, 'updated', { status: input.status, total_cents: total });
         return id;
@@ -306,8 +334,8 @@ export async function opsRoutes(app: FastifyInstance) {
       const { rows } = await db.query(
         `INSERT INTO reservation (status, starts_at, ends_at, pickup, destination, client_name, client_phone, client_email,
             notes, client_id, vehicle_id, daily_rate_cents, weekly_rate_cents, discount_cents, quote_cents, guarantee_cents,
-            created_by, updated_by, service, passengers, source, price_mode)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$17,'rental',1,'staff',$18) RETURNING id`, values);
+            created_by, updated_by, service, passengers, source, price_mode, coupon_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$17,'rental',1,'staff',$18,$19) RETURNING id`, values);
       await logEvent(db, rows[0].id, staffId, 'created', { status: input.status, total_cents: total });
       return rows[0].id as string;
     });
@@ -319,6 +347,7 @@ export async function opsRoutes(app: FastifyInstance) {
       const id = await saveReservation(req.staff!.id, input);
       return reply.code(201).send({ reservation: await loadReservation(id!) });
     } catch (error) {
+      if (error instanceof HttpError) return reply.code(error.status).send({ error: { message: error.message } });
       const msg = conflict(error); if (msg) return reply.code(409).send({ error: { message: msg } });
       throw error;
     }
@@ -332,6 +361,7 @@ export async function opsRoutes(app: FastifyInstance) {
       if (!saved) return reply.code(404).send({ error: { message: 'Reserva no encontrada' } });
       return { reservation: await loadReservation(id) };
     } catch (error) {
+      if (error instanceof HttpError) return reply.code(error.status).send({ error: { message: error.message } });
       const msg = conflict(error); if (msg) return reply.code(409).send({ error: { message: msg } });
       throw error;
     }
@@ -385,6 +415,7 @@ export async function opsRoutes(app: FastifyInstance) {
       if (!updated) return reply.code(404).send({ error: { message: 'Reserva no encontrada' } });
       return { reservation: await loadReservation(id) };
     } catch (error: any) {
+      if (error instanceof HttpError) return reply.code(error.status).send({ error: { message: error.message } });
       const msg = conflict(error); if (msg) return reply.code(409).send({ error: { message: msg } });
       throw error;
     }
@@ -469,17 +500,17 @@ export async function opsRoutes(app: FastifyInstance) {
     const { rows } = await pool.query('SELECT * FROM client WHERE id=$1', [id]);
     if (!rows[0]) return reply.code(404).send({ error: { message: 'Cliente no encontrado' } });
     const reservations = await pool.query(`${RESERVATION_SELECT} WHERE r.client_id=$1 ORDER BY r.starts_at DESC`, [id]);
-    return { client: rows[0], reservations: reservations.rows };
+    return { client: rows[0], reservations: reservations.rows, blocked_matches: await blockedMatches(rows[0]) };
   });
 
   app.put('/v1/ops/clients/:id', async (req: any, reply) => {
     const id = uuid.parse(req.params.id);
-    const b = clientInput.extend({ notes: optText(2000), blocked: z.boolean().default(false) }).parse(req.body);
+    const b = clientInput.extend({ notes: optText(2000), blocked: z.boolean().default(false), blocked_reason: optText(300) }).parse(req.body);
     try {
       const { rows } = await pool.query(
         `UPDATE client SET full_name=$2, phone=$3, email=$4, id_document=$5, license_number=$6, license_expires=$7,
-           address=$8, notes=$9, blocked=$10, updated_at=now() WHERE id=$1 RETURNING *`,
-        [id, b.full_name, b.phone, b.email, b.id_document, b.license_number, b.license_expires, b.address, b.notes, b.blocked],
+           address=$8, notes=$9, blocked=$10, blocked_reason=$11, updated_at=now() WHERE id=$1 RETURNING *`,
+        [id, b.full_name, b.phone, b.email, b.id_document, b.license_number, b.license_expires, b.address, b.notes, b.blocked, b.blocked ? b.blocked_reason : null],
       );
       if (!rows[0]) return reply.code(404).send({ error: { message: 'Cliente no encontrado' } });
       return { client: rows[0] };
@@ -526,32 +557,120 @@ export async function opsRoutes(app: FastifyInstance) {
   });
 
   // ─────────────────────────── Unidades y ajustes ───────────────────────────
+  const vehicleInput = z.object({
+    name: z.string().trim().min(2).max(80),
+    plate: optText(20),
+    capacity: z.number().int().min(1).max(60),
+    model_year: z.number().int().min(1990).max(2100).nullish(),
+    color: optText(40),
+    odometer_km: z.number().int().min(0).max(2_000_000).nullish(),
+    active: z.boolean(),
+    notes: optText(1000),
+    insurance_expires: dateSchema.nullish(),
+    verification_expires: dateSchema.nullish(),
+    permit_expires: dateSchema.nullish(),
+    service_every_km: z.number().int().min(500).max(100_000).default(10000),
+    service_every_months: z.number().int().min(1).max(36).default(6),
+    vehicle_type: z.string().trim().min(2).max(60).default('Nissan Urvan'),
+    daily_rate_cents: cents.nullish(),
+    weekly_rate_cents: cents.nullish(),
+    on_website: z.boolean().default(true),
+    gps_url: z.string().trim().max(500).nullish().or(z.literal('')).transform(v => v || null)
+      .refine(u => u == null || /^https:\/\/\S+$/.test(u), 'El enlace del GPS debe empezar con https://'),
+  });
+  const vehicleValues = (b: z.infer<typeof vehicleInput>) => [b.name, b.plate, b.capacity, b.model_year ?? null, b.color,
+    b.odometer_km ?? null, b.active, b.notes, b.insurance_expires ?? null, b.verification_expires ?? null, b.permit_expires ?? null,
+    b.service_every_km, b.service_every_months, b.vehicle_type, b.daily_rate_cents ?? null,
+    b.daily_rate_cents != null ? (b.weekly_rate_cents ?? null) : null, b.on_website, b.gps_url];
+  const plateTaken = (error: any) => error?.code === '23505' ? 'Ya hay otra unidad con esas placas' : null;
+
   app.put('/v1/ops/vehicles/:id', { preHandler: requireAdmin }, async (req: any, reply) => {
     const id = uuid.parse(req.params.id);
-    const b = z.object({
-      name: z.string().trim().min(2).max(80),
-      plate: optText(20),
-      capacity: z.number().int().min(1).max(60),
-      model_year: z.number().int().min(1990).max(2100).nullish(),
-      color: optText(40),
-      odometer_km: z.number().int().min(0).max(2_000_000).nullish(),
-      active: z.boolean(),
-      notes: optText(1000),
-      insurance_expires: dateSchema.nullish(),
-      verification_expires: dateSchema.nullish(),
-      permit_expires: dateSchema.nullish(),
-      service_every_km: z.number().int().min(500).max(100_000).default(10000),
-      service_every_months: z.number().int().min(1).max(36).default(6),
-    }).parse(req.body);
-    const { rows } = await pool.query(
-      `UPDATE vehicle SET name=$2, plate=$3, capacity=$4, model_year=$5, color=$6, odometer_km=$7, active=$8, notes=$9,
-          insurance_expires=$10, verification_expires=$11, permit_expires=$12, service_every_km=$13, service_every_months=$14
-        WHERE id=$1 RETURNING ${VEHICLE_COLUMNS}`,
-      [id, b.name, b.plate, b.capacity, b.model_year ?? null, b.color, b.odometer_km ?? null, b.active, b.notes,
-        b.insurance_expires ?? null, b.verification_expires ?? null, b.permit_expires ?? null, b.service_every_km, b.service_every_months],
-    );
-    if (!rows[0]) return reply.code(404).send({ error: { message: 'Unidad no encontrada' } });
-    return { vehicle: { ...rows[0], alerts: vehicleAlerts(rows[0]) } };
+    const b = vehicleInput.parse(req.body);
+    try {
+      const { rows } = await pool.query(
+        `UPDATE vehicle SET name=$2, plate=$3, capacity=$4, model_year=$5, color=$6, odometer_km=$7, active=$8, notes=$9,
+            insurance_expires=$10, verification_expires=$11, permit_expires=$12, service_every_km=$13, service_every_months=$14,
+            vehicle_type=$15, daily_rate_cents=$16, weekly_rate_cents=$17, on_website=$18, gps_url=$19
+          WHERE id=$1 RETURNING ${VEHICLE_COLUMNS}`, [id, ...vehicleValues(b)]);
+      if (!rows[0]) return reply.code(404).send({ error: { message: 'Unidad no encontrada' } });
+      return { vehicle: { ...rows[0], alerts: vehicleAlerts(rows[0]) } };
+    } catch (error) {
+      const msg = plateTaken(error); if (msg) return reply.code(409).send({ error: { message: msg } });
+      throw error;
+    }
+  });
+
+  /** Alta de una unidad nueva (otra Urvan u otro tipo de vehículo). Código consecutivo VEH-04, VEH-05… */
+  app.post('/v1/ops/vehicles', { preHandler: requireAdmin }, async (req: any, reply) => {
+    const b = vehicleInput.parse(req.body);
+    try {
+      const { rows } = await pool.query(
+        `INSERT INTO vehicle (code, name, plate, capacity, model_year, color, odometer_km, active, notes, insurance_expires,
+            verification_expires, permit_expires, service_every_km, service_every_months, vehicle_type, daily_rate_cents,
+            weekly_rate_cents, on_website, gps_url)
+         VALUES ('VEH-' || lpad(((SELECT count(*) FROM vehicle) + 1)::text, 2, '0'),
+            $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING ${VEHICLE_COLUMNS}`, vehicleValues(b));
+      return reply.code(201).send({ vehicle: { ...rows[0], alerts: vehicleAlerts(rows[0]) } });
+    } catch (error) {
+      const msg = plateTaken(error); if (msg) return reply.code(409).send({ error: { message: msg } });
+      throw error;
+    }
+  });
+
+  // ───────────────────────────── Cupones ─────────────────────────────
+  app.get('/v1/ops/coupons', async () => ({ data: await listCoupons() }));
+
+  /** Revisa un cupón desde el formulario de renta y devuelve el descuento que daría. */
+  app.get('/v1/ops/coupons/check', async req => {
+    const q = z.object({
+      code: z.string().trim().min(1).max(20), starts_at: isoDateTime, ends_at: isoDateTime,
+      vehicle_id: uuid.optional(), reservation_id: uuid.optional(),
+      daily_rate_cents: z.coerce.number().int().min(0).optional(), weekly_rate_cents: z.coerce.number().int().min(0).optional(),
+      price_mode: z.enum(['auto', 'rates', 'manual']).optional(),
+    }).parse(req.query);
+    if (q.price_mode === 'manual') return { ok: false, message: 'El cupón no aplica cuando el total es acordado a mano' };
+    const base = await priceFor({ ...q, discount_cents: 0 });
+    const c = await checkCoupon(pool, q.code, { days: base.days, total_cents: base.total_cents, channel: 'staff', exceptReservation: q.reservation_id });
+    return c.ok ? { ok: true, code: c.coupon.code, discount_cents: c.discount_cents, total_cents: base.total_cents - c.discount_cents } : c;
+  });
+
+  const couponValues = (b: z.infer<typeof couponInput>) => [b.code, b.kind, b.value, b.min_days, b.starts_on, b.ends_on,
+    b.max_uses ?? null, b.on_website, b.active, b.note];
+  const couponTaken = (error: any) => error?.code === '23505' ? 'Ya existe un cupón con ese código' : null;
+
+  app.post('/v1/ops/coupons', { preHandler: requireAdmin }, async (req, reply) => {
+    const b = couponInput.parse(req.body);
+    try {
+      const { rows } = await pool.query(
+        `INSERT INTO coupon (code, kind, value, min_days, starts_on, ends_on, max_uses, on_website, active, note)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`, couponValues(b));
+      return reply.code(201).send({ id: rows[0].id });
+    } catch (error) {
+      const msg = couponTaken(error); if (msg) return reply.code(409).send({ error: { message: msg } });
+      throw error;
+    }
+  });
+
+  app.put('/v1/ops/coupons/:id', { preHandler: requireAdmin }, async (req: any, reply) => {
+    const id = uuid.parse(req.params.id);
+    const b = couponInput.parse(req.body);
+    try {
+      const { rowCount } = await pool.query(
+        `UPDATE coupon SET code=$1, kind=$2, value=$3, min_days=$4, starts_on=$5, ends_on=$6, max_uses=$7, on_website=$8,
+            active=$9, note=$10 WHERE id=$11`, [...couponValues(b), id]);
+      if (!rowCount) return reply.code(404).send({ error: { message: 'Cupón no encontrado' } });
+      return { ok: true };
+    } catch (error) {
+      const msg = couponTaken(error); if (msg) return reply.code(409).send({ error: { message: msg } });
+      throw error;
+    }
+  });
+
+  // ───────────────────────────── Reportes ─────────────────────────────
+  app.get('/v1/ops/reports', { preHandler: requireAdmin }, async req => {
+    const q = z.object({ year: z.coerce.number().int().min(2020).max(2100).optional() }).parse(req.query);
+    return yearReport(q.year ?? Number(new Date().toLocaleDateString('en-CA', { timeZone: TZ }).slice(0, 4)));
   });
 
   app.put('/v1/ops/settings/fx', { preHandler: requireAdmin }, async (req: any) => {

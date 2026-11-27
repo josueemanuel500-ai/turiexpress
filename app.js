@@ -17,6 +17,7 @@
     units: [{ id: 'u1' }, { id: 'u2' }, { id: 'u3' }],
     busy: [],          // { unit, from, to } en fechas locales AAAA-MM-DD
     pricing: null,     // { daily_cents, weekly_cents, deposit_cents, usd_rate }
+    coupon: '',        // código aplicado (se valida en el servidor con cada cotización)
   };
   const $ = s => document.querySelector(s);
 
@@ -107,21 +108,46 @@
     const days = rentalDays();
     const local = days ? localQuote(days) : null;
     if (!days || local === null) { box.hidden = true; return; }
-    const paint = (total, seasons = [], rate = state.pricing?.usd_rate) => {
+    const paint = (total, seasons = [], rate = state.pricing?.usd_rate, discount = 0) => {
       const usd = fmtUSD(total, rate);
       const deposit = state.pricing?.deposit_cents;
       box.hidden = false;
       box.innerHTML = `<strong>${plural(days, 'día', 'días', 'day', 'days')} · ${t('estimado', 'estimate')} ${fmtMXN(total)}</strong>
+        ${discount ? `<span class="discount">${t(`Cupón ${state.coupon}: −${fmtMXN(discount)}`, `Coupon ${state.coupon}: −${fmtMXN(discount)}`)}</span>` : ''}
         ${usd ? `<span class="usd">≈ ${usd} ${t('(referencia en dólares)', '(US dollar reference)')}</span>` : ''}
         <small>${seasons.length ? t(`Incluye tarifa de temporada (${seasons.join(', ')}). `, `Includes seasonal rate (${seasons.join(', ')}). `) : ''}${deposit ? t(`Más depósito reembolsable de ${fmtMXN(deposit)}. `, `Plus a refundable deposit of ${fmtMXN(deposit)}. `) : ''}${t('El cobro es en pesos; el precio final se confirma por WhatsApp.', 'Charged in Mexican pesos; final price confirmed on WhatsApp.')}</small>`;
     };
-    paint(local);
-    // Precio exacto del servidor (considera temporadas: Navidad, Semana Santa, verano…).
+    if (!state.coupon) paint(local);
+    // Precio exacto del servidor (considera temporadas: Navidad, Semana Santa, verano… y el cupón).
     const mine = ++ticket;
-    fetch(`${API_BASE}/public/quote?start_date=${iso(state.start)}&end_date=${iso(state.end)}`)
+    const coupon = state.coupon ? `&coupon=${encodeURIComponent(state.coupon)}` : '';
+    fetch(`${API_BASE}/public/quote?start_date=${iso(state.start)}&end_date=${iso(state.end)}${coupon}`)
       .then(r => (r.ok ? r.json() : null))
-      .then(q => { if (q && mine === ticket && q.days) paint(q.total_cents, q.seasons, q.usd_rate); })
-      .catch(() => {});
+      .then(q => {
+        if (!q || mine !== ticket || !q.days) return;
+        // Un cupón inválido no se envía con la solicitud: el cliente puede apartar igual sin descuento.
+        if (q.coupon && !q.coupon.ok) { state.coupon = ''; couponMessage(lang === 'es' ? q.coupon.message : 'That coupon is not valid for these dates.', true); }
+        if (q.coupon?.ok) couponMessage(t(`Cupón ${q.coupon.code} aplicado.`, `Coupon ${q.coupon.code} applied.`));
+        paint(q.total_cents, q.seasons, q.usd_rate, q.discount_cents);
+      })
+      .catch(() => { if (state.coupon) paint(local); });
+  }
+
+  function couponMessage(text, bad = false) {
+    const el = $('#coupon-message');
+    if (!el) return;
+    el.textContent = text;
+    el.classList.toggle('bad', bad);
+  }
+
+  function applyCoupon() {
+    const input = $('#coupon');
+    state.coupon = input.value.trim().toUpperCase().replace(/[^A-Z0-9-]/g, '');
+    input.value = state.coupon;
+    if (!state.coupon) { couponMessage(''); renderEstimate(); return; }
+    if (!state.start || !state.end) { couponMessage(t('Elige tus fechas y el descuento aparecerá en el estimado.', 'Pick your dates and the discount will show in the estimate.')); return; }
+    couponMessage(t('Revisando cupón…', 'Checking coupon…'));
+    renderEstimate();
   }
 
   function select(date) {
@@ -153,6 +179,8 @@
   $('#next-month').onclick = () => { state.month = new Date(state.month.getFullYear(), state.month.getMonth() + 1, 1); loadAvailability(); };
   $('#calendar-days').addEventListener('mouseleave', () => document.querySelectorAll('#calendar-days .preview').forEach(el => el.classList.remove('preview')));
   $('#clear-dates').onclick = () => { state.start = null; state.end = null; $('#form-message').textContent = ''; render(); };
+  $('#apply-coupon')?.addEventListener('click', applyCoupon);
+  $('#coupon')?.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); applyCoupon(); } });
   $('#name').addEventListener('input', updateSubmit);
   $('#phone').addEventListener('input', updateSubmit);
 
@@ -171,7 +199,7 @@
     try {
       res = await fetch(`${API_BASE}/public/reservations`, {
         method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ start_date: iso(state.start), end_date: iso(state.end), client_name: name, client_phone: phone, website: $('#website')?.value || '' }),
+        body: JSON.stringify({ start_date: iso(state.start), end_date: iso(state.end), client_name: name, client_phone: phone, website: $('#website')?.value || '', coupon: state.coupon || undefined }),
       });
       data = await res.json().catch(() => null);
     } catch { res = null; }
@@ -204,7 +232,7 @@
     }
     const url = waLink(text);
     if (tab) tab.location = url; else window.location.href = url;
-    state.start = null; state.end = null;
+    state.start = null; state.end = null; state.coupon = ''; couponMessage('');
     $('#booking-form').reset();
     await loadAvailability();
   });

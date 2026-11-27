@@ -6,6 +6,9 @@ import { seasonalQuote, type Pricing } from '../pricing.js';
 import { getExtras, getSeasons } from '../operations.js';
 import { notifyStaff } from '../push.js';
 import { usdRate } from '../fx.js';
+import { checkCoupon } from '../growth.js';
+
+const couponParam = z.string().trim().max(20).optional().transform(v => v || undefined);
 
 const DEFAULT_PRICING: Pricing = { daily_cents: 0, weekly_cents: 0, deposit_cents: 0 };
 
@@ -14,13 +17,18 @@ export async function publicRoutes(app: FastifyInstance) {
 
   /** Cotización para el sitio: incluye temporadas (precios especiales por fecha). */
   app.get('/v1/public/quote', async req => {
-    const q = z.object({ start_date: dateSchema, end_date: dateSchema, start_time: z.string().regex(/^\d{2}:\d{2}$/).default('09:00') }).parse(req.query);
+    const q = z.object({ start_date: dateSchema, end_date: dateSchema, start_time: z.string().regex(/^\d{2}:\d{2}$/).default('09:00'), coupon: couponParam }).parse(req.query);
     const startsAt = new Date(`${q.start_date}T${q.start_time}:00${BUSINESS_OFFSET}`);
     const endsAt = new Date(`${q.end_date}T${q.start_time}:00${BUSINESS_OFFSET}`);
     if (endsAt <= startsAt) return { days: 0, total_cents: 0, seasons: [], usd_rate: null };
     const pricing = await getSetting('pricing', DEFAULT_PRICING);
     const r = seasonalQuote(startsAt, endsAt, pricing, await getSeasons());
-    return { days: r.days, total_cents: r.total_cents, seasons: r.seasons, deposit_cents: pricing.deposit_cents, usd_rate: await usdRate() };
+    const c = q.coupon ? await checkCoupon(pool, q.coupon, { days: r.days, total_cents: r.total_cents, channel: 'web' }) : null;
+    return {
+      days: r.days, subtotal_cents: r.total_cents, total_cents: r.total_cents - (c?.ok ? c.discount_cents : 0),
+      discount_cents: c?.ok ? c.discount_cents : 0, coupon: c ? (c.ok ? { ok: true, code: c.coupon.code } : { ok: false, message: c.message }) : null,
+      seasons: r.seasons, deposit_cents: pricing.deposit_cents, usd_rate: await usdRate(),
+    };
   });
 
   app.get('/v1/public/pricing', async () => {
@@ -32,10 +40,10 @@ export async function publicRoutes(app: FastifyInstance) {
   app.get('/v1/public/availability', async req => {
     const q = z.object({ from: dateSchema, to: dateSchema }).parse(req.query);
     const [vehicles, busy] = await Promise.all([
-      pool.query('SELECT id, name FROM vehicle WHERE active ORDER BY code'),
+      pool.query('SELECT id, name FROM vehicle WHERE active AND on_website ORDER BY code'),
       pool.query(
         `SELECT vehicle_id, starts_at, ends_at FROM reservation
-          WHERE vehicle_id IS NOT NULL AND status = ANY($3::reservation_status[])
+          WHERE vehicle_id IN (SELECT id FROM vehicle WHERE active AND on_website) AND status = ANY($3::reservation_status[])
             AND starts_at < (($2::date + 1)::timestamp AT TIME ZONE 'America/Merida')
             AND ends_at > ($1::date::timestamp AT TIME ZONE 'America/Merida')`,
         [q.from, q.to, BLOCKING],
@@ -52,6 +60,7 @@ export async function publicRoutes(app: FastifyInstance) {
     client_phone: phoneSchema,
     pickup: z.string().trim().max(300).optional(),
     notes: z.string().trim().max(1000).optional(),
+    coupon: couponParam,
     // Campo trampa: los bots lo llenan, las personas no lo ven.
     website: z.string().max(0).optional(),
   });
@@ -72,20 +81,29 @@ export async function publicRoutes(app: FastifyInstance) {
     const q = seasonalQuote(new Date(startsAt), new Date(endsAt), pricing, await getSeasons());
     const days = q.days;
     const { hold_hours } = await getExtras();
+    let coupon: { id: string; discount_cents: number } | null = null;
+    if (b.coupon) {
+      const c = await checkCoupon(pool, b.coupon, { days, total_cents: q.total_cents, channel: 'web' });
+      if (!c.ok) return reply.code(422).send({ error: { message: c.message } });
+      coupon = { id: c.coupon.id, discount_cents: c.discount_cents };
+    }
+    const total = q.total_cents - (coupon?.discount_cents ?? 0);
 
     // La solicitud aparta la unidad unas horas (estado "Apartada"): nadie más puede pedir esas fechas
     // mientras la confirmas. Si no se confirma a tiempo, se libera sola (ver reminders.ts).
     const result = await tx(async db => {
-      const free = await freeVehicles(db, startsAt, endsAt);
+      const free = await freeVehicles(db, startsAt, endsAt, undefined, true);
       if (!free.length) return null;
       const client = await upsertClient(db, { full_name: b.client_name, phone: b.client_phone }, false);
       const { rows } = await db.query(
         `INSERT INTO reservation (service,status,starts_at,ends_at,pickup,passengers,client_name,client_phone,notes,
-            client_id,vehicle_id,daily_rate_cents,weekly_rate_cents,quote_cents,guarantee_cents,source,price_mode,hold_until)
-         VALUES ('rental','hold',$1,$2,$3,1,$4,$5,$6,$7,$8,$9,$10,$11,$12,'website','auto', now() + make_interval(hours => $13::int))
+            client_id,vehicle_id,daily_rate_cents,weekly_rate_cents,quote_cents,guarantee_cents,source,price_mode,hold_until,
+            discount_cents,coupon_id)
+         VALUES ('rental','hold',$1,$2,$3,1,$4,$5,$6,$7,$8,$9,$10,$11,$12,'website','auto', now() + make_interval(hours => $13::int),$14,$15)
          RETURNING id, folio`,
         [startsAt, endsAt, b.pickup || 'Por confirmar', b.client_name, b.client_phone, b.notes ?? null,
-          client.id, free[0].id, q.daily_cents, q.weekly_cents, q.total_cents, pricing.deposit_cents, hold_hours],
+          client.id, free[0].id, q.daily_cents, q.weekly_cents, total, pricing.deposit_cents, hold_hours,
+          coupon?.discount_cents ?? 0, coupon?.id ?? null],
       );
       await logEvent(db, rows[0].id, null, 'created_public', { source: 'website' });
       return { ...rows[0], vehicle: free[0].name, blocked: client.blocked };
@@ -97,14 +115,14 @@ export async function publicRoutes(app: FastifyInstance) {
 
     notifyStaff({
       title: `Nueva solicitud ${result.folio}`,
-      body: `${b.client_name} · ${b.start_date} → ${b.end_date} (${days} día${days === 1 ? '' : 's'}) · ${money(q.total_cents)}${result.blocked ? ' · ⚠ cliente bloqueado' : ''}`,
+      body: `${b.client_name} · ${b.start_date} → ${b.end_date} (${days} día${days === 1 ? '' : 's'}) · ${money(total)}${b.coupon ? ` · cupón ${b.coupon.toUpperCase()}` : ''}${result.blocked ? ' · ⚠ cliente bloqueado' : ''}`,
       url: `/#/reservas/${result.id}`,
       tag: `reservation-${result.id}`,
       urgent: true,
     }, m => app.log.warn(m)).catch(error => app.log.error(error));
 
     return reply.code(201).send({
-      reservation: { folio: result.folio, days, total_cents: q.total_cents, guarantee_cents: pricing.deposit_cents },
+      reservation: { folio: result.folio, days, total_cents: total, discount_cents: coupon?.discount_cents ?? 0, guarantee_cents: pricing.deposit_cents },
     });
   });
 }

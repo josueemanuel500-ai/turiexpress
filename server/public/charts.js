@@ -111,7 +111,38 @@ function drawDonut(host, data) {
   });
 }
 
-const drawers = { line: drawLine, donut: drawDonut };
+// ───────── Barras verticales ─────────
+// labels: [{ key, label, long }], values: números; max opcional (1 para porcentajes).
+// Solo la barra más alta lleva su valor escrito; el resto se lee al pasar el dedo o el cursor.
+function drawBars(host, data) {
+  const { labels, values, color, format, current, unit = '' } = data;
+  const W = Math.max(260, host.clientWidth), H = 200;
+  const m = { t: 22, r: 8, b: 26, l: 8 };
+  const iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const max = data.max ?? niceMax(Math.max(1, ...values));
+  const slot = iw / values.length, bw = Math.max(6, Math.min(34, slot - 6));
+  const top = values.indexOf(Math.max(...values));
+  const ci = labels.findIndex(l => l.key === current);
+  const bar = (v, i) => {
+    const h = Math.max(v > 0 ? 4 : 0, (v / max) * ih), x = m.l + i * slot + (slot - bw) / 2, y = m.t + ih - h;
+    const r = Math.min(4, bw / 2, h);
+    return h ? `<path d="M${x},${m.t + ih} V${y + r} Q${x},${y} ${x + r},${y} H${x + bw - r} Q${x + bw},${y} ${x + bw},${y + r} V${m.t + ih} Z" fill="${color}" opacity="${ci >= 0 && i > ci ? 0.35 : 1}"/>` : '';
+  };
+  host.innerHTML = `<svg width="${W}" height="${H}" role="img" aria-label="${esc(unit)}">
+    <line x1="${m.l}" x2="${W - m.r}" y1="${m.t + ih}" y2="${m.t + ih}" stroke="${AXIS}"/>
+    ${values.map(bar).join('')}
+    ${values[top] > 0 ? `<text x="${m.l + top * slot + slot / 2}" y="${m.t + ih - (values[top] / max) * ih - 6}" text-anchor="middle" font-size="11.5" font-weight="700" fill="${INK}">${esc(format(values[top]))}</text>` : ''}
+    ${labels.map((l, i) => `<text x="${m.l + i * slot + slot / 2}" y="${H - 8}" text-anchor="middle" font-size="11" fill="${i === ci ? INK : MUTED}" font-weight="${i === ci ? 700 : 500}">${esc(l.label)}</text>`).join('')}
+    ${values.map((_, i) => `<rect class="hit" data-i="${i}" x="${m.l + i * slot}" y="0" width="${slot}" height="${H}" fill="transparent"/>`).join('')}
+  </svg>`;
+  host.querySelectorAll('.hit').forEach(h => {
+    const i = Number(h.dataset.i);
+    const show = e => showTip(`<strong>${esc(labels[i].long)}</strong><div class="tip-row"><i style="background:${color}"></i>${esc(format(values[i]))}</div><div class="tip-row muted">${esc(unit)}</div>`, e.clientX, e.clientY);
+    h.addEventListener('pointermove', show); h.addEventListener('pointerdown', show); h.addEventListener('pointerleave', hideTip);
+  });
+}
+
+const drawers = { line: drawLine, donut: drawDonut, bars: drawBars };
 
 /** Dibuja todas las gráficas [data-chart] dentro de root. `registry` guarda los datos por id. */
 export function mountCharts(root, registry) {
@@ -120,7 +151,7 @@ export function mountCharts(root, registry) {
     const draw = drawers[data?.type];
     if (!draw) return;
     draw(host, data);
-    if (data.type === 'line' && 'ResizeObserver' in window) {
+    if ((data.type === 'line' || data.type === 'bars') && 'ResizeObserver' in window) {
       let w = host.clientWidth;
       new ResizeObserver(() => { if (host.isConnected && host.clientWidth !== w) { w = host.clientWidth; draw(host, data); } }).observe(host);
     }
